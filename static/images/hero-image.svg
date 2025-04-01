@@ -1,0 +1,15 @@
+<svg width="600" height="400" viewBox="0 0 600 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="600" height="400" rx="20" fill="#F1F5F9"/>
+  <circle cx="300" cy="200" r="120" fill="#3B82F6" fill-opacity="0.1"/>
+  <path d="M300 80C235.2 80 183 132.2 183 197C183 261.8 235.2 314 300 314C364.8 314 417 261.8 417 197C417 132.2 364.8 80 300 80ZM300 294C246.3 294 203 250.7 203 197C203 143.3 246.3 100 300 100C353.7 100 397 143.3 397 197C397 250.7 353.7 294 300 294Z" fill="#3B82F6"/>
+  <path d="M300 140C277.9 140 260 157.9 260 180C260 202.1 277.9 220 300 220C322.1 220 340 202.1 340 180C340 157.9 322.1 140 300 140Z" fill="#3B82F6"/>
+  <path d="M300 220C267.5 220 240 247.5 240 280V290C240 293.3 242.7 296 246 296H354C357.3 296 360 293.3 360 290V280C360 247.5 332.5 220 300 220Z" fill="#3B82F6"/>
+  <path d="M150 160H110C106.7 160 104 162.7 104 166V234C104 237.3 106.7 240 110 240H150C153.3 240 156 237.3 156 234V166C156 162.7 153.3 160 150 160Z" fill="#10B981"/>
+  <path d="M490 160H450C446.7 160 444 162.7 444 166V234C444 237.3 446.7 240 450 240H490C493.3 240 496 237.3 496 234V166C496 162.7 493.3 160 490 160Z" fill="#10B981"/>
+  <path d="M130 180L130 220" stroke="#10B981" stroke-width="8" stroke-linecap="round"/>
+  <path d="M110 200L150 200" stroke="#10B981" stroke-width="8" stroke-linecap="round"/>
+  <path d="M470 200L470 200.1" stroke="#10B981" stroke-width="8" stroke-linecap="round"/>
+  <path d="M450 180L490 180" stroke="#10B981" stroke-width="8" stroke-linecap="round"/>
+  <path d="M450 200L490 200" stroke="#10B981" stroke-width="8" stroke-linecap="round"/>
+  <path d="M450 220L490 220" stroke="#10B981" stroke-width="8" stroke-linecap="round"/>
+</svg> 

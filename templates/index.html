@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}VeriMedia - AI-Driven Media Analysis Tool{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-content">
+        <h1>Ethical Media Analysis with AI</h1>
+        <p class="hero-subtitle">
+            Enhance your capacity to report ethically and accurately on topics related to refugees, migrants, and other forcibly displaced populations.
+        </p>
+        <div class="hero-buttons">
+            <a href="#upload-section" class="btn btn-primary">Analyze Media</a>
+            <a href="{{ url_for('about') }}" class="btn btn-secondary">Learn More</a>
+        </div>
+    </div>
+    <div class="hero-image">
+        <img src="{{ url_for('static', filename='images/hero-image.svg') }}" alt="VeriMedia AI Analysis">
+    </div>
+</section>
+
+<section id="upload-section" class="upload-section">
+    <div class="section-header">
+        <h2>Analyze Your Media</h2>
+        <p>Upload text, audio, or video content for AI-powered analysis</p>
+    </div>
+    
+    <div class="upload-container">
+        <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="upload-form">
+            <div class="file-type-selector">
+                <div class="file-type-option">
+                    <input type="radio" name="file_type" id="text-type" value="text" checked>
+                    <label for="text-type">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Text</span>
+                    </label>
+                </div>
+                <div class="file-type-option">
+                    <input type="radio" name="file_type" id="audio-type" value="audio">
+                    <label for="audio-type">
+                        <i class="fas fa-headphones"></i>
+                        <span>Audio</span>
+                    </label>
+                </div>
+                <div class="file-type-option">
+                    <input type="radio" name="file_type" id="video-type" value="video">
+                    <label for="video-type">
+                        <i class="fas fa-video"></i>
+                        <span>Video</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="file-upload-area">
+                <div class="file-upload-placeholder">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Drag and drop your file here or click to browse</p>
+                    <span class="file-format-hint" id="format-hint">Supported formats: .txt, .pdf, .doc, .docx</span>
+                </div>
+                <input type="file" name="file" id="file-input" class="file-input">
+            </div>
+            
+            <div class="upload-actions">
+                <button type="submit" class="btn btn-primary btn-upload">
+                    <i class="fas fa-analytics"></i> Analyze Content
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="features-section">
+    <div class="section-header">
+        <h2>Key Features</h2>
+        <p>How VeriMedia helps you create more ethical and accurate content</p>
+    </div>
+    
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <h3>Toxicity Detection</h3>
+            <p>Identify potentially harmful or xenophobic language in your content</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-lightbulb"></i>
+            </div>
+            <h3>Improvement Suggestions</h3>
+            <p>Receive actionable recommendations to enhance your content's inclusivity</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <h3>Comprehensive Reports</h3>
+            <p>Get detailed analysis reports to understand areas for improvement</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-globe"></i>
+            </div>
+            <h3>Multi-language Support</h3>
+            <p>Analyze content in multiple languages for global reporting</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-microphone"></i>
+            </div>
+            <h3>Audio Analysis</h3>
+            <p>Examine spoken content for tone and language considerations</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">
+                <i class="fas fa-video"></i>
+            </div>
+            <h3>Video Analysis</h3>
+            <p>Evaluate visual and audio elements in video content</p>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="cta-content">
+        <h2>Ready to Improve Your Media Content?</h2>
+        <p>Start analyzing your content today and contribute to more ethical reporting on refugee and migration issues.</p>
+        <a href="#upload-section" class="btn btn-primary">Get Started</a>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const fileTypeInputs = document.querySelectorAll('input[name="file_type"]');
+        const formatHint = document.getElementById('format-hint');
+        const fileInput = document.getElementById('file-input');
+        const uploadPlaceholder = document.querySelector('.file-upload-placeholder');
+        
+        // Update format hint based on selected file type
+        fileTypeInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                if (this.value === 'text') {
+                    formatHint.textContent = 'Supported formats: .txt, .pdf, .doc, .docx';
+                } else if (this.value === 'audio') {
+                    formatHint.textContent = 'Supported formats: .mp3, .wav, .ogg, .m4a, .flac';
+                } else if (this.value === 'video') {
+                    formatHint.textContent = 'Supported formats: .mp4, .webm, .mpeg, .mov (MOV files will be automatically converted)';
+                }
+            });
+        });
+        
+        // Handle file selection
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                const fileName = this.files[0].name;
+                uploadPlaceholder.innerHTML = `
+                    <i class="fas fa-file"></i>
+                    <p>${fileName}</p>
+                    <span class="file-selected">File selected. Click "Analyze Content" to proceed.</span>
+                `;
+                uploadPlaceholder.classList.add('file-selected');
+            } else {
+                uploadPlaceholder.innerHTML = `
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>Drag and drop your file here or click to browse</p>
+                    <span class="file-format-hint" id="format-hint">Supported formats: .txt, .pdf, .doc, .docx</span>
+                `;
+                uploadPlaceholder.classList.remove('file-selected');
+            }
+        });
+        
+        // Handle drag and drop
+        const dropArea = document.querySelector('.file-upload-area');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            dropArea.classList.add('highlight');
+        }
+        
+        function unhighlight() {
+            dropArea.classList.remove('highlight');
+        }
+        
+        dropArea.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            fileInput.files = files;
+            
+            // Trigger change event
+            const event = new Event('change');
+            fileInput.dispatchEvent(event);
+        }
+    });
+</script>
+{% endblock %} 
