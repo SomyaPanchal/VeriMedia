@@ -37,4 +37,7 @@ wheels/
 .env.*.local
 
 # Logs
-*.log 
+*.log
+
+# macOS
+.DS_Store 
