@@ -40,4 +40,8 @@ wheels/
 *.log
 
 # macOS
-.DS_Store 
+.DS_Store
+
+# Application specific
+uploads/
+uploads/temp_audio/ 

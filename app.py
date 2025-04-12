@@ -3,6 +3,9 @@ from werkzeug.utils import secure_filename
 import os
 import openai
 from dotenv import load_dotenv
+import tempfile
+import time
+import subprocess
 
 # Load environment variables
 load_dotenv()
@@ -11,23 +14,190 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-for-development')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max upload size
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max upload size for videos
+app.config['MAX_VIDEO_SIZE'] = 500 * 1024 * 1024  # 500MB max video file size
+app.config['MAX_AUDIO_SIZE'] = 25 * 1024 * 1024  # 25MB max audio size (OpenAI API limit)
 
-# Update allowed extensions to match what Whisper API supports
+# Update allowed extensions to match what we support
 app.config['ALLOWED_EXTENSIONS'] = {
     'text': {'txt', 'pdf', 'doc', 'docx'},
     'audio': {'mp3', 'wav', 'ogg', 'm4a', 'flac', 'oga', 'mpga'},
-    'video': {'mp4', 'webm', 'mpeg', 'mov'}  # Added MOV to allowed video formats
+    'video': {'mp4', 'webm', 'mpeg', 'mov', 'avi', 'mkv'}  # Added more video formats
 }
 
-# Whisper API supported formats (for reference and validation)
-WHISPER_SUPPORTED_FORMATS = {'flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'}
+# OpenAI Audio API supported formats (for reference and validation)
+AUDIO_SUPPORTED_FORMATS = {'flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'}
 
 # Create uploads directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Create a temporary directory for audio conversions
+TEMP_AUDIO_DIR = os.path.join(app.config['UPLOAD_FOLDER'], 'temp_audio')
+os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
+
 # OpenAI API key (will be set later)
 openai.api_key = os.environ.get('OPENAI_API_KEY')
+
+def convert_video_to_audio(video_path):
+    """Convert video to compressed audio format suitable for OpenAI API"""
+    try:
+        # Create a temporary audio file with a unique name
+        temp_audio_file = tempfile.NamedTemporaryFile(suffix='.mp3', dir=TEMP_AUDIO_DIR, delete=False)
+        temp_audio_path = temp_audio_file.name
+        temp_audio_file.close()
+        
+        print(f"Converting video to audio: {video_path} -> {temp_audio_path}")
+        
+        # Try with moviepy first
+        try:
+            from moviepy.editor import VideoFileClip
+            
+            # Load video with optimized settings
+            video_clip = VideoFileClip(
+                video_path,
+                audio_buffersize=20000,  # Increased buffer for larger files
+                verbose=False,
+                target_resolution=(360, 640)  # Lower resolution to save memory
+            )
+            
+            if video_clip.audio:
+                # Extract audio with aggressive compression
+                video_clip.audio.write_audiofile(
+                    temp_audio_path,
+                    verbose=False,
+                    logger=None,
+                    bitrate='48k',  # Very low bitrate
+                    ffmpeg_params=[
+                        '-ac', '1',  # Mono
+                        '-ar', '16000',  # 16kHz sample rate
+                        '-q:a', '9'  # Lowest quality
+                    ]
+                )
+                video_clip.close()
+                print("Audio extraction successful with moviepy")
+            else:
+                video_clip.close()
+                raise Exception("No audio track found in video")
+                
+        except Exception as moviepy_error:
+            print(f"MoviePy extraction failed: {str(moviepy_error)}")
+            
+            # Try with ffmpeg directly
+            try:
+                print("Attempting ffmpeg extraction...")
+                from imageio_ffmpeg import get_ffmpeg_exe
+                ffmpeg_exe = get_ffmpeg_exe()
+                
+                # Use ffmpeg with aggressive compression
+                cmd = [
+                    ffmpeg_exe, '-y',  # Overwrite output files
+                    '-i', video_path,  # Input file
+                    '-vn',  # No video
+                    '-acodec', 'libmp3lame',  # MP3 codec
+                    '-ac', '1',  # Mono
+                    '-ar', '16000',  # 16kHz sample rate
+                    '-b:a', '48k',  # 48kbps bitrate
+                    '-filter:a', 'volume=1.5',  # Slightly boost volume
+                    '-filter:a', 'loudnorm',  # Normalize audio
+                    '-q:a', '9',  # Lowest quality
+                    temp_audio_path
+                ]
+                
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                stdout, stderr = process.communicate()
+                
+                if process.returncode != 0:
+                    print(f"FFmpeg error: {stderr.decode('utf-8', errors='ignore')}")
+                    raise Exception("FFmpeg conversion failed")
+                    
+                print("Audio extraction successful with ffmpeg")
+                
+            except Exception as ffmpeg_error:
+                print(f"FFmpeg extraction failed: {str(ffmpeg_error)}")
+                raise Exception(f"Could not extract audio: {str(ffmpeg_error)}")
+        
+        # Verify the audio file
+        if not os.path.exists(temp_audio_path) or os.path.getsize(temp_audio_path) == 0:
+            raise Exception("Audio extraction failed - output file is empty")
+        
+        # Check if the extracted audio is still too large
+        audio_size = os.path.getsize(temp_audio_path)
+        if audio_size > app.config['MAX_AUDIO_SIZE']:
+            print(f"Audio file too large ({audio_size/1024/1024:.1f}MB), attempting additional compression...")
+            
+            try:
+                from pydub import AudioSegment
+                
+                # Load and compress audio
+                audio = AudioSegment.from_file(temp_audio_path)
+                
+                # Apply aggressive compression
+                audio = audio.set_channels(1)  # Mono
+                audio = audio.set_frame_rate(16000)  # 16kHz
+                
+                # Export with minimal quality
+                audio.export(
+                    temp_audio_path,
+                    format="mp3",
+                    bitrate="32k",  # Even lower bitrate
+                    parameters=[
+                        "-q:a", "9",  # Lowest quality
+                        "-ac", "1",  # Force mono again
+                        "-ar", "16000"  # Force sample rate again
+                    ]
+                )
+                
+                # Check final size
+                audio_size = os.path.getsize(temp_audio_path)
+                if audio_size > app.config['MAX_AUDIO_SIZE']:
+                    raise Exception(f"Audio still too large after compression: {audio_size/1024/1024:.1f}MB")
+                    
+            except Exception as comp_error:
+                print(f"Audio compression failed: {str(comp_error)}")
+                raise Exception(f"Audio compression failed: {str(comp_error)}")
+        
+        return temp_audio_path
+        
+    except Exception as e:
+        # Clean up temp file if it exists
+        if 'temp_audio_path' in locals() and os.path.exists(temp_audio_path):
+            try:
+                os.unlink(temp_audio_path)
+            except:
+                pass
+        raise e
+
+def cleanup_temp_files():
+    """Clean up old temporary files"""
+    try:
+        # Clean files older than 1 hour
+        threshold = time.time() - 3600
+        
+        for root, dirs, files in os.walk(TEMP_AUDIO_DIR):
+            for file in files:
+                path = os.path.join(root, file)
+                if os.path.getctime(path) < threshold:
+                    try:
+                        os.unlink(path)
+                    except:
+                        pass
+    except:
+        pass
+
+# Register cleanup function to run periodically
+@app.before_request
+def before_request():
+    cleanup_temp_files()
+
+# Error handler for file too large
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    flash('The file is too large. Maximum allowed size is 500MB.', 'error')
+    return redirect(url_for('index')), 413
 
 def allowed_file(filename, file_type=None):
     """Check if the file extension is allowed"""
@@ -46,79 +216,107 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload and analysis"""
-    if 'file' not in request.files:
-        flash('No file part', 'error')
-        return redirect(url_for('index'))
+    file_path = None
+    audio_path = None
     
-    file = request.files['file']
-    
-    if file.filename == '':
-        flash('No file selected', 'error')
-        return redirect(url_for('index'))
-    
-    file_type = request.form.get('file_type')
-    
-    # Check if the file has an extension
-    if '.' not in file.filename:
-        flash('Invalid file (no extension)', 'error')
-        return redirect(url_for('index'))
-    
-    # Get the file extension
-    file_extension = file.filename.rsplit('.', 1)[1].lower()
-    
-    # Special handling for video files - check if it's a format supported by Whisper API
-    if file_type == 'video' and file_extension not in WHISPER_SUPPORTED_FORMATS and file_extension != 'mov':
-        supported_video_formats = [fmt for fmt in WHISPER_SUPPORTED_FORMATS if fmt in ['mp4', 'webm', 'mpeg']]
-        supported_formats_str = ", ".join(supported_video_formats + ['mov'])
-        flash(f'Unsupported video format: .{file_extension}. Only {supported_formats_str} are supported for video analysis.', 'error')
-        return redirect(url_for('index'))
-    
-    if file and allowed_file(file.filename, file_type):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-        
-        # Handle MOV files or other non-directly supported video formats by converting to MP4
-        converted_file_path = None
-        if file_type == 'video' and (file_extension == 'mov' or file_extension not in WHISPER_SUPPORTED_FORMATS):
-            try:
-                flash('Converting video file to a compatible format for processing...', 'info')
-                converted_file_path = convert_video_format(file_path, 'mp4')
-                file_path = converted_file_path  # Use the converted file for processing
-            except Exception as e:
-                flash(f'Error converting video file: {str(e)}', 'error')
-                return redirect(url_for('index'))
-        
-        try:
-            # Process the file based on its type
-            result = process_file(file_path, file_type)
-            
-            # Clean up converted file if it exists
-            if converted_file_path and os.path.exists(converted_file_path):
-                try:
-                    os.unlink(converted_file_path)
-                except:
-                    pass  # Ignore errors in cleanup
-            
-            # Store results in session for PDF generation
-            session['suggestions'] = result.get('suggestions', [])
-            session['report_content'] = result.get('report', 'No report available')
-            
-            # Return the analysis results
-            return render_template('results.html', result=result)
-        except Exception as e:
-            flash(f'Error processing file: {str(e)}', 'error')
+    try:
+        if 'file' not in request.files:
+            flash('No file part', 'error')
             return redirect(url_for('index'))
-        finally:
-            # Clean up converted file if it exists and wasn't cleaned up
-            if converted_file_path and os.path.exists(converted_file_path):
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            flash('No file selected', 'error')
+            return redirect(url_for('index'))
+        
+        # Check file size before processing
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)  # Reset file pointer
+        
+        file_type = request.form.get('file_type')
+        
+        # Different size limits for different file types
+        if file_type == 'video' and file_size > app.config['MAX_VIDEO_SIZE']:
+            flash(f'The video file is too large. Maximum allowed size is {app.config["MAX_VIDEO_SIZE"] / (1024 * 1024):.0f}MB.', 'error')
+            return redirect(url_for('index'))
+        elif file_type == 'audio' and file_size > app.config['MAX_AUDIO_SIZE']:
+            flash(f'The audio file is too large. Maximum allowed size is {app.config["MAX_AUDIO_SIZE"] / (1024 * 1024):.0f}MB.', 'error')
+            return redirect(url_for('index'))
+        
+        if file and allowed_file(file.filename, file_type):
+            # Save the uploaded file
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            
+            try:
+                # Process the file based on type
+                if file_type == 'video':
+                    # Convert video to audio first
+                    audio_path = convert_video_to_audio(file_path)
+                    result = process_file(audio_path, 'audio')
+                else:
+                    result = process_file(file_path, file_type)
+                
+                # Store results in session for PDF generation
+                session['suggestions'] = result.get('suggestions', [])
+                session['report_content'] = result.get('report', 'No report available')
+                
+                # Return the analysis results with the UI template
+                return render_template('results.html', result=result)
+                    
+            except Exception as e:
+                error_msg = str(e)
+                print(f"Error processing file: {error_msg}")
+                
+                if "Could not extract audio" in error_msg:
+                    flash("Could not extract audio from the video. Please ensure the video contains an audio track.", 'error')
+                elif "too large" in error_msg.lower():
+                    flash("The extracted audio is too large for processing. Please use a shorter video.", 'error')
+                else:
+                    flash(f"Error processing file: {error_msg}", 'error')
+                
+                return redirect(url_for('index'))
+            
+            finally:
+                # Clean up files in finally block
                 try:
-                    os.unlink(converted_file_path)
-                except:
-                    pass  # Ignore errors in cleanup
-    
-    flash('File type not allowed', 'error')
-    return redirect(url_for('index'))
+                    if file_path and os.path.exists(file_path):
+                        os.unlink(file_path)
+                except Exception as cleanup_error:
+                    print(f"Error cleaning up file {file_path}: {str(cleanup_error)}")
+                
+                try:
+                    if audio_path and os.path.exists(audio_path):
+                        os.unlink(audio_path)
+                except Exception as cleanup_error:
+                    print(f"Error cleaning up audio file {audio_path}: {str(cleanup_error)}")
+        
+        flash('Invalid file type', 'error')
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        # Handle any other unexpected errors
+        error_msg = str(e)
+        print(f"Unexpected error in upload_file: {error_msg}")
+        
+        # Clean up any files that might have been created
+        try:
+            if file_path and os.path.exists(file_path):
+                os.unlink(file_path)
+        except:
+            pass
+            
+        try:
+            if audio_path and os.path.exists(audio_path):
+                os.unlink(audio_path)
+        except:
+            pass
+        
+        flash(f"An unexpected error occurred: {error_msg}", 'error')
+        return redirect(url_for('index'))
 
 def process_file(file_path, file_type):
     """Process the uploaded file and return analysis results"""
@@ -218,7 +416,7 @@ def analyze_text(file_path):
         
         # Analyze the text content using GPT
         analysis_response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the text content for xenophobic language, misinformation, and harmful content."},
                 {"role": "user", "content": f"Analyze the following text content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report.\n\nContent: {analyzed_content}"}
@@ -302,7 +500,7 @@ def analyze_text(file_path):
         }
 
 def analyze_audio(file_path):
-    """Analyze audio content using OpenAI Whisper API for transcription and GPT for analysis"""
+    """Analyze audio content using OpenAI Audio API for transcription and GPT for analysis"""
     try:
         # Check if OpenAI API key is set
         if not openai.api_key:
@@ -330,19 +528,22 @@ def analyze_audio(file_path):
         # For M4A files, we might need to convert to a more universally supported format
         temp_file_path = None
         try_conversion = False
+        transcription_error = None
         
         # First try direct transcription
         try:
             with open(file_path, "rb") as audio_file:
                 transcript_response = openai.audio.transcriptions.create(
                     model="whisper-1",
-                    file=audio_file
+                    file=audio_file,
+                    response_format="text"
                 )
-            transcribed_text = transcript_response.text
-        except Exception as e:
-            print(f"Direct transcription failed: {str(e)}")
+            transcribed_text = transcript_response
+        except Exception as direct_error:
+            print(f"Direct transcription failed: {str(direct_error)}")
             # If direct transcription fails, try conversion
             try_conversion = True
+            transcription_error = direct_error
         
         # If direct transcription failed and it's an M4A file, try conversion
         if try_conversion and file_extension == 'm4a':
@@ -365,9 +566,10 @@ def analyze_audio(file_path):
                 with open(temp_file_path, "rb") as audio_file:
                     transcript_response = openai.audio.transcriptions.create(
                         model="whisper-1",
-                        file=audio_file
+                        file=audio_file,
+                        response_format="text"
                     )
-                transcribed_text = transcript_response.text
+                transcribed_text = transcript_response
                 
                 print("Conversion and transcription successful")
             except Exception as conversion_error:
@@ -377,14 +579,14 @@ def analyze_audio(file_path):
                 return {
                     'toxicity_level': 'Error',
                     'suggestions': ['Audio processing failed'],
-                    'report': f'Error: Could not process the M4A file. Original error: {str(e)}. Conversion error: {str(conversion_error)}'
+                    'report': f'Error: Could not process the M4A file. Original error: {str(transcription_error)}. Conversion error: {str(conversion_error)}'
                 }
         elif try_conversion:
             # If it's not an M4A file and direct transcription failed
             return {
                 'toxicity_level': 'Error',
                 'suggestions': ['Audio transcription failed'],
-                'report': f'Error: Could not transcribe the audio file. {str(e)}'
+                'report': f'Error: Could not transcribe the audio file. {str(transcription_error)}'
             }
         
         # Clean up temporary file if it was created
@@ -406,7 +608,7 @@ def analyze_audio(file_path):
         
         # Analyze the transcribed text using GPT
         analysis_response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed audio content for xenophobic language, misinformation, and harmful content."},
                 {"role": "user", "content": f"Analyze the following transcribed audio content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report.\n\nTranscribed content: {transcribed_text}"}
@@ -490,7 +692,7 @@ def analyze_audio(file_path):
         }
 
 def analyze_video(file_path):
-    """Analyze video content by sending directly to Whisper API or extracting audio with minimal dependencies"""
+    """Analyze video content by extracting audio and sending to OpenAI Audio API"""
     try:
         # Check if OpenAI API key is set
         if not openai.api_key:
@@ -504,9 +706,9 @@ def analyze_video(file_path):
         file_extension = file_path.rsplit('.', 1)[1].lower()
         print(f"Processing video file: {file_path} (Format: {file_extension})")
         
-        # Check file size - OpenAI Whisper API has a 25MB limit
+        # Check file size
         file_size = os.path.getsize(file_path) / (1024 * 1024)  # Size in MB
-        whisper_limit_mb = 25  # OpenAI's Whisper API has a 25MB limit
+        audio_api_limit_mb = 25
         
         if file_size > 100:  # General app limit
             return {
@@ -514,203 +716,310 @@ def analyze_video(file_path):
                 'suggestions': ['File size too large'],
                 'report': f'Error: The video file is {file_size:.1f}MB, which exceeds our 100MB limit. Please compress or shorten your video.'
             }
-        elif file_size > whisper_limit_mb:
-            # File is under our app limit but over OpenAI's limit
-            return {
-                'toxicity_level': 'Error',
-                'suggestions': [
-                    'File exceeds OpenAI\'s 25MB limit',
-                    'Please compress your video or extract the audio',
-                    f'Your file is {file_size:.1f}MB, but the limit is 25MB'
-                ],
-                'report': f'Error: Your video file is {file_size:.1f}MB, which exceeds OpenAI\'s 25MB limit for audio processing. Please either:\n\n1. Compress your video to under 25MB\n2. Extract just the audio from your video and upload it as an audio file (MP3, WAV, M4A)\n3. Split your video into smaller segments and analyze each separately'
-            }
         
-        # For video files, we need to ensure they're in a compatible format
-        # Let's try to use a more direct approach with the file
+        # Always extract audio first
+        print("Extracting audio from video...")
+        temp_audio_path = None  # Initialize here so it's defined for all exception handlers
         try:
-            print(f"Attempting to transcribe {file_extension} video directly with Whisper API...")
+            # Create a temporary audio file
+            import tempfile
+            temp_audio_file = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+            temp_audio_path = temp_audio_file.name
+            temp_audio_file.close()
             
-            # For debugging, print more information about the file
-            print(f"File exists: {os.path.exists(file_path)}")
-            print(f"File size: {file_size:.2f} MB")
+            # Try with moviepy first
+            audio_extracted = False
+            try:
+                print("Attempting audio extraction with moviepy...")
+                from moviepy.editor import VideoFileClip
+                
+                # Print debugging info
+                print(f"File path: {file_path}")
+                print(f"File exists: {os.path.exists(file_path)}")
+                
+                # Use conservative settings for larger files
+                video_clip = VideoFileClip(
+                    file_path, 
+                    audio_buffersize=10000,  # Smaller buffer
+                    verbose=False,
+                    target_resolution=(360, 640)  # Lower resolution
+                )
+                
+                if video_clip.audio:
+                    print(f"Video loaded successfully. Duration: {video_clip.duration}s")
+                    print("Extracting audio track...")
+                    
+                    # Use optimized settings for audio extraction
+                    video_clip.audio.write_audiofile(
+                        temp_audio_path,
+                        verbose=False,
+                        logger=None,
+                        bitrate='64k',  # Lower bitrate
+                        ffmpeg_params=[
+                            '-ac', '1',  # Mono
+                            '-ar', '16000',  # 16kHz sample rate
+                            '-q:a', '9'  # Lowest quality
+                        ]
+                    )
+                    
+                    video_clip.close()
+                    audio_extracted = True
+                    print("Audio extraction successful with moviepy")
+                else:
+                    video_clip.close()
+                    print("No audio track found in video")
+                    return {
+                        'toxicity_level': 'Error',
+                        'suggestions': ['No audio track found in video'],
+                        'report': 'Error: No audio track could be found in the video file. Please ensure your video contains speech content.'
+                    }
+            except Exception as moviepy_error:
+                print(f"MoviePy audio extraction error: {str(moviepy_error)}")
+                
+                # If moviepy failed, try with imageio/ffmpeg
+                if not audio_extracted:
+                    try:
+                        print("Trying alternative method with imageio/ffmpeg...")
+                        import imageio.v3 as iio
+                        from imageio_ffmpeg import get_ffmpeg_exe
+                        
+                        ffmpeg_exe = get_ffmpeg_exe()
+                        print(f"Found bundled FFmpeg: {ffmpeg_exe}")
+                        
+                        # Extract with optimized ffmpeg settings
+                        cmd = [
+                            ffmpeg_exe, '-y',
+                            '-i', file_path,
+                            '-vn',  # No video
+                            '-acodec', 'libmp3lame',
+                            '-ac', '1',  # Mono
+                            '-ar', '16000',  # 16kHz sample rate
+                            '-ab', '64k',  # 64kbps bitrate
+                            '-q:a', '9',  # Lowest quality
+                            temp_audio_path
+                        ]
+                        
+                        import subprocess
+                        process = subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE
+                        )
+                        stdout, stderr = process.communicate()
+                        
+                        if process.returncode == 0 and os.path.exists(temp_audio_path) and os.path.getsize(temp_audio_path) > 0:
+                            audio_extracted = True
+                            print("Audio extraction successful with ffmpeg")
+                        else:
+                            print(f"FFmpeg error: {stderr.decode('utf-8', errors='ignore')}")
+                    except Exception as ffmpeg_error:
+                        print(f"FFmpeg extraction failed: {str(ffmpeg_error)}")
             
-            # Read the file in binary mode to ensure proper handling
-            with open(file_path, "rb") as video_file:
-                # Create a named temporary file that keeps the original extension
-                import tempfile
-                import shutil
-                
-                # Create a temporary file with the same extension
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}")
-                temp_path = temp_file.name
-                temp_file.close()
-                
-                # Copy the original file to the temporary file
-                shutil.copy2(file_path, temp_path)
-                
-                # Open the temporary file for the API call
-                with open(temp_path, "rb") as api_file:
+            # Verify audio extraction
+            if not audio_extracted or not os.path.exists(temp_audio_path) or os.path.getsize(temp_audio_path) == 0:
+                raise Exception("Could not extract audio from video using any available method")
+            
+            # Check audio file size
+            audio_size = os.path.getsize(temp_audio_path) / (1024 * 1024)  # Size in MB
+            print(f"Extracted audio size: {audio_size:.1f}MB")
+            
+            # Compress if still too large
+            if audio_size > audio_api_limit_mb:
+                print("Extracted audio is too large, attempting additional compression...")
+                try:
+                    from pydub import AudioSegment
+                    
+                    # Load the audio
+                    audio = AudioSegment.from_file(temp_audio_path)
+                    
+                    # Create compressed file path
+                    compressed_audio_path = temp_audio_path + '.compressed.mp3'
+                    
+                    # Apply aggressive compression
+                    audio = audio.set_channels(1)  # Mono
+                    audio = audio.set_frame_rate(16000)  # 16kHz
+                    
+                    # Export with minimal quality
+                    audio.export(
+                        compressed_audio_path,
+                        format="mp3",
+                        bitrate="48k",  # Even lower bitrate
+                        parameters=["-q:a", "9"]  # Lowest quality
+                    )
+                    
+                    # Replace original with compressed
+                    os.unlink(temp_audio_path)
+                    os.rename(compressed_audio_path, temp_audio_path)
+                    
+                    # Check new size
+                    audio_size = os.path.getsize(temp_audio_path) / (1024 * 1024)
+                    print(f"Compressed audio size: {audio_size:.1f}MB")
+                except Exception as comp_error:
+                    print(f"Compression error: {str(comp_error)}")
+            
+            # Final size check
+            if audio_size > audio_api_limit_mb:
+                os.unlink(temp_audio_path)
+                return {
+                    'toxicity_level': 'Error',
+                    'suggestions': [
+                        'Extracted audio still exceeds API limit',
+                        'Please use a shorter video or compress it further',
+                        f'Extracted audio was {audio_size:.1f}MB, limit is 25MB'
+                    ],
+                    'report': f'Error: Even after extracting and compressing the audio, the file is {audio_size:.1f}MB, which exceeds the 25MB API limit. Please use a shorter video or further compress your content.'
+                }
+            
+            # Transcribe the audio
+            print("Transcribing extracted audio...")
+            try:
+                with open(temp_audio_path, "rb") as audio_file:
                     transcript_response = openai.audio.transcriptions.create(
                         model="whisper-1",
-                        file=api_file
+                        file=audio_file,
+                        response_format="text"
                     )
-                
-                # Clean up the temporary file
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass  # Ignore cleanup errors
-                
-            transcribed_text = transcript_response.text
-            print("Direct transcription successful")
+                transcribed_text = transcript_response
+                print("Transcription successful")
+            except Exception as transcribe_error:
+                # Clean up and return error
+                if temp_audio_path and os.path.exists(temp_audio_path):
+                    os.unlink(temp_audio_path)
+                raise Exception(f"Transcription failed: {str(transcribe_error)}")
             
-            # If we get here, the direct transcription worked
+            # Clean up temp file
+            try:
+                if temp_audio_path and os.path.exists(temp_audio_path):
+                    os.unlink(temp_audio_path)
+            except Exception as cleanup_error:
+                print(f"Warning: Could not delete temporary file: {str(cleanup_error)}")
+            
+            # Check transcription result
             if not transcribed_text:
                 return {
                     'toxicity_level': 'Error',
                     'suggestions': ['No speech detected in the video'],
                     'report': 'Error: The video file could not be transcribed. Please ensure it contains clear speech.'
                 }
-        except Exception as direct_error:
-            print(f"Direct transcription failed with error: {str(direct_error)}")
             
-            # Try to provide more specific error information
-            error_message = str(direct_error)
+            # Store transcription summary
+            transcription_summary = f"Video Transcription:\n\n{transcribed_text[:500]}..."
+            if len(transcribed_text) <= 500:
+                transcription_summary = f"Video Transcription:\n\n{transcribed_text}"
             
-            # Check for specific error types
-            if "413" in error_message or "size limit" in error_message.lower():
-                # This is a file size error
-                return {
-                    'toxicity_level': 'Error',
-                    'suggestions': [
-                        'File exceeds OpenAI\'s 25MB limit',
-                        'Please compress your video or extract the audio',
-                        f'Your file is {file_size:.1f}MB, but the limit is 25MB'
-                    ],
-                    'report': f'Error: Your video file is {file_size:.1f}MB, which exceeds OpenAI\'s 25MB limit for audio processing. Please either:\n\n1. Compress your video to under 25MB\n2. Extract just the audio from your video and upload it as an audio file (MP3, WAV, M4A)\n3. Split your video into smaller segments and analyze each separately'
-                }
-            elif "unsupported format" in error_message.lower() or "invalid file" in error_message.lower():
-                # This is a format error - should not happen with our conversion, but just in case
-                return {
-                    'toxicity_level': 'Error',
-                    'suggestions': [
-                        'Video format issue',
-                        'Please try converting to MP4 manually',
-                        'Our automatic conversion failed'
-                    ],
-                    'report': f'Error: There was an issue with the video format. Our automatic conversion process was unable to create a compatible file. Please try converting your video to MP4 format manually using a tool like HandBrake or FFmpeg. Technical details: {error_message}'
-                }
-            elif "permission" in error_message.lower():
-                suggestion = "There was a permission error accessing the file."
+            # Analyze transcribed text
+            analysis_response = openai.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed video content for xenophobic language, misinformation, and harmful content."},
+                    {"role": "user", "content": f"Analyze the following transcribed video content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report.\n\nTranscribed content: {transcribed_text}"}
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+            
+            # Extract analysis
+            analysis_text = analysis_response.choices[0].message.content
+            print("Content analysis complete")
+            
+            # Parse analysis
+            toxicity_level = "Medium"  # Default
+            suggestions = []
+            report = ""
+            
+            # Extract toxicity level
+            if "toxicity level" in analysis_text.lower():
+                for level in ["low", "medium", "high", "very high"]:
+                    if level in analysis_text.lower():
+                        toxicity_level = level.capitalize()
+                        break
+            
+            # Extract suggestions
+            suggestion_lines = []
+            in_suggestions = False
+            for line in analysis_text.split('\n'):
+                line = line.strip()
+                if "suggestions" in line.lower() or "improvements" in line.lower():
+                    in_suggestions = True
+                    continue
+                if in_suggestions and line and (line[0].isdigit() or line[0] in ['•', '-', '*']):
+                    clean_line = line
+                    while clean_line and not clean_line[0].isalpha():
+                        clean_line = clean_line[1:].strip()
+                    suggestion_lines.append(clean_line)
+                elif in_suggestions and line and "report" in line.lower():
+                    in_suggestions = False
+            
+            if suggestion_lines:
+                suggestions = suggestion_lines
             else:
-                suggestion = "There was an error processing the video file."
+                suggestions = [
+                    "Ensure diverse representation in visual content",
+                    "Be mindful of stereotypical portrayals",
+                    "Consider the tone used when discussing sensitive topics"
+                ]
             
-            # General error case
+            # Extract report
+            report_parts = []
+            in_report = False
+            for line in analysis_text.split('\n'):
+                if "report" in line.lower() or "analysis" in line.lower():
+                    in_report = True
+                    continue
+                if in_report:
+                    report_parts.append(line)
+            
+            if report_parts:
+                report = "\n".join(report_parts)
+            else:
+                report = analysis_text
+            
+            # Build final report
+            full_report = f"{report}\n\n{transcription_summary}"
+            full_report += "\n\nNote: This analysis is based on the audio content of the video. A full analysis would also include evaluation of visual elements, which requires human review."
+            
+            return {
+                'toxicity_level': toxicity_level,
+                'suggestions': suggestions,
+                'report': full_report
+            }
+            
+        except Exception as processing_error:
+            error_message = str(processing_error)
+            print(f"Video processing error: {error_message}")
+            
+            suggestions = [
+                'Video processing failed',
+                'Please try a different video format or compress your video',
+                f'Your file is {file_size:.1f}MB'
+            ]
+            
+            if "Could not extract audio" in error_message:
+                suggestions.append("Try converting your video to MP4 format with a tool like HandBrake")
+            elif "not installed" in error_message.lower() or "missing" in error_message.lower():
+                suggestions.append("Server is missing required libraries - contact administrator")
+            elif "memory" in error_message.lower():
+                suggestions.append("Video is too complex - try a shorter or simpler video file")
+            
+            # Clean up temp file if it exists
+            if temp_audio_path and os.path.exists(temp_audio_path):
+                try:
+                    os.unlink(temp_audio_path)
+                except Exception:
+                    pass
+            
             return {
                 'toxicity_level': 'Error',
-                'suggestions': ['Video processing failed', suggestion],
-                'report': f'Error: Could not process the video file. Technical details: {error_message}\n\nFor best results, please try converting your video to MP4 format manually or extract the audio to an MP3 file.'
+                'suggestions': suggestions,
+                'report': f'Error: Could not process your {file_size:.1f}MB video. Please try using a different video format (MP4 is recommended) or compress your video to a smaller size.\n\nTechnical details: {error_message}'
             }
-        
-        # Store the transcription for reference
-        transcription_summary = f"Video Transcription:\n\n{transcribed_text[:500]}..."
-        if len(transcribed_text) <= 500:
-            transcription_summary = f"Video Transcription:\n\n{transcribed_text}"
-        
-        # Analyze the transcribed text using GPT
-        print("Analyzing transcribed content...")
-        analysis_response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed video content for xenophobic language, misinformation, and harmful content."},
-                {"role": "user", "content": f"Analyze the following transcribed video content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report.\n\nTranscribed content: {transcribed_text}"}
-            ],
-            temperature=0.3,
-            max_tokens=1000
-        )
-        
-        # Extract the analysis from the response
-        analysis_text = analysis_response.choices[0].message.content
-        print("Analysis complete")
-        
-        # Parse the analysis to extract toxicity level, suggestions, and report
-        toxicity_level = "Medium"  # Default
-        suggestions = []
-        report = ""
-        
-        # Simple parsing of the GPT response
-        if "toxicity level" in analysis_text.lower():
-            for level in ["low", "medium", "high", "very high"]:
-                if level in analysis_text.lower():
-                    toxicity_level = level.capitalize()
-                    break
-        
-        # Extract suggestions (look for numbered or bulleted lists)
-        suggestion_lines = []
-        in_suggestions = False
-        for line in analysis_text.split('\n'):
-            line = line.strip()
-            if "suggestions" in line.lower() or "improvements" in line.lower():
-                in_suggestions = True
-                continue
-            if in_suggestions and line and (line[0].isdigit() or line[0] in ['•', '-', '*']):
-                # Clean up the line (remove leading numbers, bullets, etc.)
-                clean_line = line
-                while clean_line and not clean_line[0].isalpha():
-                    clean_line = clean_line[1:].strip()
-                suggestion_lines.append(clean_line)
-            elif in_suggestions and line and "report" in line.lower():
-                in_suggestions = False
-        
-        if suggestion_lines:
-            suggestions = suggestion_lines
-        else:
-            # Fallback: just extract some reasonable suggestions
-            suggestions = [
-                "Ensure diverse representation in visual content",
-                "Be mindful of stereotypical portrayals",
-                "Consider the tone used when discussing sensitive topics"
-            ]
-        
-        # Extract report (everything after "report" or "analysis")
-        report_parts = []
-        in_report = False
-        for line in analysis_text.split('\n'):
-            if "report" in line.lower() or "analysis" in line.lower():
-                in_report = True
-                continue
-            if in_report:
-                report_parts.append(line)
-        
-        if report_parts:
-            report = "\n".join(report_parts)
-        else:
-            # Use the whole analysis as the report if we couldn't parse it
-            report = analysis_text
-        
-        # Add the transcription to the report
-        full_report = f"{report}\n\n{transcription_summary}"
-        
-        # Add a note about visual content
-        full_report += "\n\nNote: This analysis is based on the audio content of the video. A full analysis would also include evaluation of visual elements, which requires human review."
-        
-        # If this was a converted MOV file, add a note about that
-        if '_converted.mp4' in file_path or file_extension == 'mov':
-            full_report += "\n\nNote: Your MOV file was automatically converted to MP4 format for processing."
-        
-        return {
-            'toxicity_level': toxicity_level,
-            'suggestions': suggestions,
-            'report': full_report
-        }
     
-    except Exception as e:
-        print(f"Unexpected error in analyze_video: {str(e)}")
+    except Exception as outer_error:
+        print(f"Unexpected error in analyze_video: {str(outer_error)}")
         return {
             'toxicity_level': 'Error',
             'suggestions': ['An error occurred during video analysis'],
-            'report': f'Error: {str(e)}'
+            'report': f'Error: {str(outer_error)}'
         }
 
 @app.route('/about')
