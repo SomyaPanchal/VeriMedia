@@ -55,6 +55,12 @@
             <div class="tabs-header">
                 <button class="tab-btn active" data-tab="suggestions">Suggestions</button>
                 <button class="tab-btn" data-tab="report">Full Report</button>
+                {% if result.transcription %}
+                <button class="tab-btn" data-tab="transcription">Transcription</button>
+                {% endif %}
+                {% if result.wordcloud_image %}
+                <button class="tab-btn" data-tab="wordcloud">Xenophobic Words</button>
+                {% endif %}
             </div>
             
             <div class="tabs-content">
@@ -88,6 +94,35 @@
                         {% endif %}
                     </div>
                 </div>
+                
+                {% if result.transcription %}
+                <div class="tab-pane" id="transcription-tab">
+                    <h3>Full Transcription</h3>
+                    <div class="transcription-content">
+                        <p>{{ result.transcription|safe }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if result.wordcloud_image %}
+                <div class="tab-pane" id="wordcloud-tab">
+                    <h3>Xenophobic Words Visualization</h3>
+                    <div class="wordcloud-container">
+                        <img src="data:image/png;base64,{{ result.wordcloud_image }}" alt="Word Cloud of Xenophobic Words">
+                        
+                        {% if result.xenophobic_words %}
+                            <div class="words-list">
+                                <h4>Identified Xenophobic Words:</h4>
+                                <div class="tags">
+                                    {% for word in result.xenophobic_words %}
+                                        <span class="tag">{{ word }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

@@ -1248,4 +1248,76 @@ footer {
     .about-sidebar {
         margin-top: 2rem;
     }
+}
+
+/* Add these styles for the word cloud visualization */
+.wordcloud-container {
+    text-align: center;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.wordcloud-container img {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+}
+
+.words-list {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.tag {
+    display: inline-block;
+    padding: 5px 10px;
+    background-color: #e63946;
+    color: white;
+    border-radius: 20px;
+    font-size: 0.85rem;
+}
+
+/* Ensure the wordcloud tab content is properly styled */
+#wordcloud-tab .no-data {
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    text-align: center;
+    color: #6c757d;
+}
+
+/* Transcription styles */
+.transcription-content {
+    background-color: var(--gray-100);
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    white-space: pre-wrap;
+    max-height: 500px;
+    overflow-y: auto;
+    line-height: 1.8;
+    font-size: 1rem;
+    color: var(--gray-800);
+}
+
+.transcription-content p {
+    margin-bottom: 1.5rem;
+}
+
+/* Make sure word-wrap works for long transcriptions */
+.transcription-content p {
+    word-break: break-word;
 } 

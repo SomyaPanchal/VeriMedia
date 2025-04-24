@@ -6,6 +6,13 @@ from dotenv import load_dotenv
 import tempfile
 import time
 import subprocess
+import matplotlib
+# Set non-interactive backend before importing pyplot
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+import base64
+from io import BytesIO
 
 # Load environment variables
 load_dotenv()
@@ -263,6 +270,9 @@ def upload_file():
                 # Store results in session for PDF generation
                 session['suggestions'] = result.get('suggestions', [])
                 session['report_content'] = result.get('report', 'No report available')
+                session['xenophobic_words'] = result.get('xenophobic_words', [])
+                session['wordcloud_image'] = result.get('wordcloud_image')
+                session['transcription'] = result.get('transcription', None)
                 
                 # Return the analysis results with the UI template
                 return render_template('results.html', result=result)
@@ -419,7 +429,7 @@ def analyze_text(file_path):
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the text content for xenophobic language, misinformation, and harmful content."},
-                {"role": "user", "content": f"Analyze the following text content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report.\n\nContent: {analyzed_content}"}
+                {"role": "user", "content": f"Analyze the following text content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, 3) A comprehensive analysis report, and 4) A list of potentially xenophobic or problematic words/phrases found in the text. Format the list of xenophobic words as JSON in this format: {{\"xenophobic_words\": [\"word1\", \"word2\", ...]}}.\n\nContent: {analyzed_content}"}
             ],
             temperature=0.3,
             max_tokens=1000
@@ -474,14 +484,71 @@ def analyze_text(file_path):
             if "report" in line.lower() or "analysis" in line.lower():
                 in_report = True
                 continue
-            if in_report:
+            if in_report and "xenophobic_words" not in line.lower():
                 report_parts.append(line)
+            elif "xenophobic_words" in line.lower():
+                in_report = False
         
         if report_parts:
             report = "\n".join(report_parts)
         else:
             # Use the whole analysis as the report if we couldn't parse it
             report = analysis_text
+        
+        # Extract xenophobic words from the JSON in the response
+        import re
+        import json
+        xenophobic_words = []
+        
+        # Look for JSON pattern in the analysis_text
+        json_match = re.search(r'\{[\s\S]*?"xenophobic_words"[\s\S]*?\}', analysis_text)
+        if json_match:
+            try:
+                json_str = json_match.group(0)
+                data = json.loads(json_str)
+                xenophobic_words = data.get("xenophobic_words", [])
+            except json.JSONDecodeError:
+                # If parsing fails, try to extract words from any section labeled as xenophobic words
+                xenophobic_section = ""
+                in_xenophobic = False
+                for line in analysis_text.split('\n'):
+                    if "xenophobic words" in line.lower() or "problematic words" in line.lower():
+                        in_xenophobic = True
+                        continue
+                    if in_xenophobic and line.strip():
+                        xenophobic_section += line + " "
+                
+                # Extract words from this section
+                if xenophobic_section:
+                    # Remove bullets, numbers, etc.
+                    cleaned = re.sub(r'^\s*[\d\*\-•]+\s*', '', xenophobic_section)
+                    # Split by common separators
+                    words = re.split(r'[,;"\'\s]+', cleaned)
+                    xenophobic_words = [w.strip() for w in words if w.strip()]
+        
+        # Generate word cloud if xenophobic words were found
+        wordcloud_image = None
+        if xenophobic_words:
+            try:
+                # Join words with space, but repeat problematic words according to their severity
+                text = " ".join(xenophobic_words)
+                
+                # Generate the word cloud
+                wordcloud = WordCloud(width=800, height=400, 
+                                    background_color='white',
+                                    colormap='viridis',
+                                    contour_width=1, 
+                                    contour_color='steelblue').generate(text)
+                
+                # Convert the image to a base64 string to embed in HTML
+                img_buffer = BytesIO()
+                # Save directly to buffer without using plt
+                wordcloud.to_image().save(img_buffer, format='PNG')
+                img_buffer.seek(0)
+                
+                wordcloud_image = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
+            except Exception as wc_error:
+                print(f"Error generating word cloud: {str(wc_error)}")
         
         # Add a note if content was truncated
         if content_truncated:
@@ -490,7 +557,9 @@ def analyze_text(file_path):
         return {
             'toxicity_level': toxicity_level,
             'suggestions': suggestions,
-            'report': report
+            'report': report,
+            'wordcloud_image': wordcloud_image,
+            'xenophobic_words': xenophobic_words
         }
     except Exception as e:
         return {
@@ -601,10 +670,8 @@ def analyze_audio(file_path):
                 'report': 'Error: The audio file could not be transcribed. Please ensure it contains clear speech.'
             }
         
-        # Store the transcription for reference
-        transcription_summary = f"Audio Transcription:\n\n{transcribed_text[:500]}..."
-        if len(transcribed_text) <= 500:
-            transcription_summary = f"Audio Transcription:\n\n{transcribed_text}"
+        # Store the full transcription
+        full_transcription = transcribed_text
         
         # Analyze the transcribed text using GPT
         analysis_response = openai.chat.completions.create(
@@ -675,13 +742,11 @@ def analyze_audio(file_path):
             # Use the whole analysis as the report if we couldn't parse it
             report = analysis_text
         
-        # Add the transcription to the report
-        full_report = f"{report}\n\n{transcription_summary}"
-        
         return {
             'toxicity_level': toxicity_level,
             'suggestions': suggestions,
-            'report': full_report
+            'report': report,
+            'transcription': full_transcription
         }
     
     except Exception as e:
@@ -902,10 +967,8 @@ def analyze_video(file_path):
                     'report': 'Error: The video file could not be transcribed. Please ensure it contains clear speech.'
                 }
             
-            # Store transcription summary
-            transcription_summary = f"Video Transcription:\n\n{transcribed_text[:500]}..."
-            if len(transcribed_text) <= 500:
-                transcription_summary = f"Video Transcription:\n\n{transcribed_text}"
+            # Store the full transcription
+            full_transcription = transcribed_text
             
             # Analyze transcribed text
             analysis_response = openai.chat.completions.create(
@@ -974,14 +1037,14 @@ def analyze_video(file_path):
             else:
                 report = analysis_text
             
-            # Build final report
-            full_report = f"{report}\n\n{transcription_summary}"
-            full_report += "\n\nNote: This analysis is based on the audio content of the video. A full analysis would also include evaluation of visual elements, which requires human review."
+            # Build final report with note about visual elements
+            report += "\n\nNote: This analysis is based on the audio content of the video. A full analysis would also include evaluation of visual elements, which requires human review."
             
             return {
                 'toxicity_level': toxicity_level,
                 'suggestions': suggestions,
-                'report': full_report
+                'report': report,
+                'transcription': full_transcription
             }
             
         except Exception as processing_error:
@@ -1040,11 +1103,14 @@ def download_report_pdf():
         toxicity_level = request.args.get('toxicity_level', 'Unknown')
         suggestions = session.get('suggestions', [])
         report_content = session.get('report_content', 'No report available')
+        xenophobic_words = session.get('xenophobic_words', [])
+        wordcloud_image = session.get('wordcloud_image')
+        transcription = session.get('transcription', None)
         
         # Import reportlab components
         from reportlab.lib.pagesizes import letter
         from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
         from io import BytesIO
@@ -1112,6 +1178,35 @@ def download_report_pdf():
             content.append(Paragraph("No suggestions available.", styles['Normal']))
         
         content.append(Spacer(1, 12))
+        
+        # Word Cloud of Xenophobic Words
+        if wordcloud_image:
+            content.append(Paragraph("XENOPHOBIC WORDS VISUALIZATION:", styles['CustomSubtitle']))
+            
+            # Decode the base64 image
+            img_data = base64.b64decode(wordcloud_image)
+            img_bio = BytesIO(img_data)
+            
+            # Add the image to the PDF
+            img = Image(img_bio, width=450, height=225)
+            content.append(img)
+            
+            # If we have xenophobic words, list them
+            if xenophobic_words:
+                content.append(Spacer(1, 12))
+                content.append(Paragraph("Identified Xenophobic Words:", styles['Normal']))
+                
+                # Create a comma-separated list
+                words_text = ", ".join(xenophobic_words)
+                content.append(Paragraph(words_text, styles['Normal']))
+            
+            content.append(Spacer(1, 12))
+        
+        # Audio/Video Transcription (if available)
+        if transcription:
+            content.append(Paragraph("TRANSCRIPTION:", styles['CustomSubtitle']))
+            content.append(Paragraph(transcription, styles['Normal_Justify']))
+            content.append(Spacer(1, 12))
         
         # Comprehensive Report
         content.append(Paragraph("COMPREHENSIVE REPORT:", styles['CustomSubtitle']))
