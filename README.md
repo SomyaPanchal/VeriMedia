@@ -20,6 +20,28 @@ VeriMedia is an AI-powered tool designed to analyze media content for ethical re
 
 ### Installation
 
+#### Option 1: Automated Setup (recommended)
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/your-username/VeriMedia.git
+   cd VeriMedia
+   ```
+
+2. Run the setup script:
+   ```
+   ./setup.sh
+   ```
+
+3. Edit the `.env` file to add your OpenAI API key
+
+4. Run the application:
+   ```
+   python3 app.py
+   ```
+
+#### Option 2: Manual Setup
+
 1. Clone the repository:
    ```
    git clone https://github.com/your-username/VeriMedia.git
@@ -64,6 +86,12 @@ VeriMedia is an AI-powered tool designed to analyze media content for ethical re
    - Word cloud of xenophobic language (for text)
    - Comprehensive analysis report
 4. Download the report as a PDF for your records
+
+## Security
+
+- **API Keys**: Never commit your API keys to the repository. The `.env` file is included in `.gitignore` to prevent accidental commits.
+- **Environment Variables**: Always use environment variables for sensitive information.
+- **Secret Management**: For production deployment, use a proper secret management solution.
 
 ## License
 

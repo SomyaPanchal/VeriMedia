@@ -11,8 +11,14 @@ ENV/
 # Flask session files
 flask_session/
 
-# Environment variables
+# Environment variables and secrets
 .env
+.env.local
+.env.*
+*.key
+credentials.json
+config.json
+secrets/
 
 # IDE files
 .vscode/
