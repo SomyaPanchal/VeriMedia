@@ -1202,13 +1202,7 @@ def download_report_pdf():
             
             content.append(Spacer(1, 12))
         
-        # Audio/Video Transcription (if available)
-        if transcription:
-            content.append(Paragraph("TRANSCRIPTION:", styles['CustomSubtitle']))
-            content.append(Paragraph(transcription, styles['Normal_Justify']))
-            content.append(Spacer(1, 12))
-        
-        # Comprehensive Report
+        # Comprehensive Report (removed transcription section)
         content.append(Paragraph("COMPREHENSIVE REPORT:", styles['CustomSubtitle']))
         content.append(Paragraph(report_content, styles['Normal_Justify']))
         
