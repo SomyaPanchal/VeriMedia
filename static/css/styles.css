@@ -734,21 +734,35 @@ footer {
 .results-actions {
     display: flex;
     gap: 1rem;
+    align-items: stretch;
+    justify-content: center;
 }
 
 .results-actions button,
 .results-actions a,
 .results-actions form {
-    min-width: 240px;
+    flex: 1;
+    width: 230px;
+    min-width: 230px;
+    max-width: 230px;
     white-space: nowrap;
 }
 
 .results-actions form {
     margin: 0;
+    display: flex;
 }
 
-.results-actions button {
+.results-actions button,
+.results-actions a {
     width: 100%;
+    height: 44px;
+    padding: 0.75rem 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: 600;
 }
 
 .results-tabs {
@@ -935,12 +949,22 @@ footer {
     .results-actions {
         width: 100%;
         flex-direction: column;
+        align-items: stretch;
     }
     
     .results-actions button,
     .results-actions a,
     .results-actions form {
+        width: 100%;
         min-width: 100%;
+        max-width: 100%;
+        flex: none;
+        margin-bottom: 0.5rem;
+    }
+    
+    .results-actions button,
+    .results-actions a {
+        height: 44px;
     }
     
     .tabs-header {
