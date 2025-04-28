@@ -434,8 +434,8 @@ def analyze_text(file_path):
         analysis_response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the text content for xenophobic language, misinformation, and harmful content."},
-                {"role": "user", "content": f"Analyze the following text content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, 3) A comprehensive analysis report, and 4) A list of potentially xenophobic or problematic words/phrases found in the text. Format the list of xenophobic words as JSON in this format: {{\"xenophobic_words\": [\"word1\", \"word2\", ...]}}.\n\nContent: {analyzed_content}"}
+                {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the text content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
+                {"role": "user", "content": f"Analyze the following text content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, 3) A comprehensive analysis report, and 4) A list of potentially xenophobic or problematic words/phrases found in the text. Format the list of xenophobic words as JSON in this format: {{\"xenophobic_words\": [\"word1\", \"word2\", ...]}}. Do not use any bold text or markdown formatting in your response.\n\nContent: {analyzed_content}"}
             ],
             temperature=0.3,
             max_tokens=1000
@@ -692,8 +692,8 @@ def analyze_audio(file_path):
         analysis_response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed audio content for xenophobic language, misinformation, and harmful content."},
-                {"role": "user", "content": f"Analyze the following transcribed audio content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report.\n\nTranscribed content: {transcribed_text}"}
+                {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed audio content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
+                {"role": "user", "content": f"Analyze the following transcribed audio content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
             ],
             temperature=0.3,
             max_tokens=1000
@@ -1000,8 +1000,8 @@ def analyze_video(file_path):
             analysis_response = openai.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed video content for xenophobic language, misinformation, and harmful content."},
-                    {"role": "user", "content": f"Analyze the following transcribed video content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report.\n\nTranscribed content: {transcribed_text}"}
+                    {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed video content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
+                    {"role": "user", "content": f"Analyze the following transcribed video content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (Low, Medium, High, or Very High), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
                 ],
                 temperature=0.3,
                 max_tokens=1000
@@ -1126,11 +1126,6 @@ def analyze_video(file_path):
 def about():
     """Render the about page"""
     return render_template('about.html')
-
-@app.route('/contact')
-def contact():
-    """Render the contact page"""
-    return render_template('contact.html')
 
 @app.route('/download_report_pdf', methods=['GET', 'POST'])
 def download_report_pdf():
@@ -1397,23 +1392,50 @@ def cleanup_report_content(report_text):
     if report_text:
         # Remove the xenophobic words list header and any JSON block that follows
         patterns = [
-            r'\d+\)\s*\*\*List of Potentially Xenophobic or Problematic Words/Phrases\*\*:.*?```json.*',
-            r'\*\*List of Potentially Xenophobic or Problematic Words/Phrases\*\*:.*?```json.*',
-            r'List of Potentially Xenophobic or Problematic Words/Phrases:.*?```json.*',
-            r'List of Potentially Xenophobic or Problematic Words/Phrases:.*?{.*?}',
+            # Match numbered xenophobic word lists with JSON codeblocks
+            r'\d+\)\s*List of potentially xenophobic or problematic words/phrases found in the text:.*?```json.*',
+            r'\d+\)\s*List of potentially xenophobic or problematic words/phrases.*?```json.*',
+            r'\d+\)\s*List of [Xx]enophobic [Ww]ords:.*?```json.*',
+            
+            # Match non-numbered variants
+            r'List of potentially xenophobic or problematic words/phrases found in the text:.*?```json.*',
+            r'List of potentially xenophobic or problematic words/phrases:.*?```json.*',
+            r'List of [Xx]enophobic [Ww]ords:.*?```json.*',
+            
+            # Match partial JSON blocks
+            r'\d+\)\s*List of potentially xenophobic or problematic words/phrases.*?{.*',
+            r'\d+\)\s*List of [Xx]enophobic [Ww]ords.*?{.*',
+            
+            # Match with asterisks
+            r'\d+\)\s*\*\*List of potentially xenophobic or problematic words/phrases\*\*:.*?```json.*',
+            r'\*\*List of potentially xenophobic or problematic words/phrases\*\*:.*?```json.*',
+            r'\*\*List of [Xx]enophobic [Ww]ords\*\*:.*?```json.*',
+            
+            # Cleanup comprehensive report headers
             r'\d+\)\s*\*\*Comprehensive Analysis Report\*\*:.*?$',
             r'\*\*Comprehensive Analysis Report\*\*:.*?$'
         ]
         
-        # Apply each pattern
+        # Apply each pattern with DOTALL to match across lines
         for pattern in patterns:
             report_text = re.sub(pattern, '', report_text, flags=re.DOTALL | re.IGNORECASE)
         
         # Additional cleanup: remove trailing colons and metadata markers
         report_text = re.sub(r'\n\d+\)\s*\*\*.*?\*\*:.*?$', '', report_text, flags=re.MULTILINE)
         
+        # Remove standalone numbered markers (like "4)") at the end of lines or the entire text
+        report_text = re.sub(r'\n\s*\d+\)\s*$', '', report_text)
+        report_text = re.sub(r'\n\s*\d+\)\s*[^\n]*?xenophobic.*?$', '', report_text, flags=re.IGNORECASE | re.MULTILINE)
+        
+        # Also remove any standalone number marker at the very end of the text
+        report_text = re.sub(r'\s*\d+\)\s*$', '', report_text)
+        
         # Clean up multiple newlines
         report_text = re.sub(r'\n{3,}', '\n\n', report_text)
+        
+        # Remove any trailing JSON opening braces
+        report_text = re.sub(r'\s*```json\s*\{\s*$', '', report_text)
+        report_text = re.sub(r'\s*\{\s*$', '', report_text)
         
     return report_text.strip()
 
