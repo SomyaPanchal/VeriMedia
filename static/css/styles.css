@@ -736,6 +736,21 @@ footer {
     gap: 1rem;
 }
 
+.results-actions button,
+.results-actions a,
+.results-actions form {
+    min-width: 240px;
+    white-space: nowrap;
+}
+
+.results-actions form {
+    margin: 0;
+}
+
+.results-actions button {
+    width: 100%;
+}
+
 .results-tabs {
     margin-top: 2rem;
 }
@@ -920,6 +935,12 @@ footer {
     .results-actions {
         width: 100%;
         flex-direction: column;
+    }
+    
+    .results-actions button,
+    .results-actions a,
+    .results-actions form {
+        min-width: 100%;
     }
     
     .tabs-header {

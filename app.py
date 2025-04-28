@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 import base64
 from io import BytesIO
+import re
+import json
 
 # Load environment variables
 load_dotenv()
@@ -274,6 +276,10 @@ def upload_file():
                 session['wordcloud_image'] = result.get('wordcloud_image')
                 session['transcription'] = result.get('transcription', None)
                 
+                # Debug session values
+                print(f"Session report_content length: {len(session.get('report_content', ''))}")
+                print(f"Result report length: {len(result.get('report', ''))}")
+                
                 # Return the analysis results with the UI template
                 return render_template('results.html', result=result)
                     
@@ -464,11 +470,19 @@ def analyze_text(file_path):
                 while clean_line and not clean_line[0].isalpha():
                     clean_line = clean_line[1:].strip()
                 suggestion_lines.append(clean_line)
-            elif in_suggestions and line and "report" in line.lower():
+            elif in_suggestions and line and ("report" in line.lower() or "analysis" in line.lower() or "xenophobic" in line.lower() or "problematic" in line.lower()):
                 in_suggestions = False
         
-        if suggestion_lines:
-            suggestions = suggestion_lines
+        # Filter out any remaining headings that might have been included
+        filtered_suggestions = []
+        for suggestion in suggestion_lines:
+            if not any(heading in suggestion.lower() for heading in ["comprehensive analysis report", "list of potentially xenophobic", "problematic words"]):
+                # Clean up any double asterisks in the suggestion
+                suggestion = cleanup_suggestion_text(suggestion)
+                filtered_suggestions.append(suggestion)
+        
+        if filtered_suggestions:
+            suggestions = filtered_suggestions
         else:
             # Fallback: just extract some reasonable suggestions
             suggestions = [
@@ -495,9 +509,10 @@ def analyze_text(file_path):
             # Use the whole analysis as the report if we couldn't parse it
             report = analysis_text
         
+        # Clean up the report content
+        report = cleanup_report_content(report)
+        
         # Extract xenophobic words from the JSON in the response
-        import re
-        import json
         xenophobic_words = []
         
         # Look for JSON pattern in the analysis_text
@@ -713,11 +728,19 @@ def analyze_audio(file_path):
                 while clean_line and not clean_line[0].isalpha():
                     clean_line = clean_line[1:].strip()
                 suggestion_lines.append(clean_line)
-            elif in_suggestions and line and "report" in line.lower():
+            elif in_suggestions and line and ("report" in line.lower() or "analysis" in line.lower() or "xenophobic" in line.lower() or "problematic" in line.lower()):
                 in_suggestions = False
         
-        if suggestion_lines:
-            suggestions = suggestion_lines
+        # Filter out any remaining headings that might have been included
+        filtered_suggestions = []
+        for suggestion in suggestion_lines:
+            if not any(heading in suggestion.lower() for heading in ["comprehensive analysis report", "list of potentially xenophobic", "problematic words"]):
+                # Clean up any double asterisks in the suggestion
+                suggestion = cleanup_suggestion_text(suggestion)
+                filtered_suggestions.append(suggestion)
+        
+        if filtered_suggestions:
+            suggestions = filtered_suggestions
         else:
             # Fallback: just extract some reasonable suggestions
             suggestions = [
@@ -741,6 +764,9 @@ def analyze_audio(file_path):
         else:
             # Use the whole analysis as the report if we couldn't parse it
             report = analysis_text
+        
+        # Clean up the report content
+        report = cleanup_report_content(report)
         
         return {
             'toxicity_level': toxicity_level,
@@ -1010,11 +1036,19 @@ def analyze_video(file_path):
                     while clean_line and not clean_line[0].isalpha():
                         clean_line = clean_line[1:].strip()
                     suggestion_lines.append(clean_line)
-                elif in_suggestions and line and "report" in line.lower():
+                elif in_suggestions and line and ("report" in line.lower() or "analysis" in line.lower() or "xenophobic" in line.lower() or "problematic" in line.lower()):
                     in_suggestions = False
             
-            if suggestion_lines:
-                suggestions = suggestion_lines
+            # Filter out any remaining headings that might have been included
+            filtered_suggestions = []
+            for suggestion in suggestion_lines:
+                if not any(heading in suggestion.lower() for heading in ["comprehensive analysis report", "list of potentially xenophobic", "problematic words"]):
+                    # Clean up any double asterisks in the suggestion
+                    suggestion = cleanup_suggestion_text(suggestion)
+                    filtered_suggestions.append(suggestion)
+            
+            if filtered_suggestions:
+                suggestions = filtered_suggestions
             else:
                 suggestions = [
                     "Ensure diverse representation in visual content",
@@ -1039,6 +1073,9 @@ def analyze_video(file_path):
             
             # Build final report with note about visual elements
             report += "\n\nNote: This analysis is based on the audio content of the video. A full analysis would also include evaluation of visual elements, which requires human review."
+            
+            # Clean up the report content
+            report = cleanup_report_content(report)
             
             return {
                 'toxicity_level': toxicity_level,
@@ -1095,17 +1132,56 @@ def contact():
     """Render the contact page"""
     return render_template('contact.html')
 
-@app.route('/download_report_pdf')
+@app.route('/download_report_pdf', methods=['GET', 'POST'])
 def download_report_pdf():
     """Generate and download a PDF report"""
     try:
-        # Get report data from session
-        toxicity_level = request.args.get('toxicity_level', 'Unknown')
-        suggestions = session.get('suggestions', [])
-        report_content = session.get('report_content', 'No report available')
-        xenophobic_words = session.get('xenophobic_words', [])
-        wordcloud_image = session.get('wordcloud_image')
+        # Check if this is a POST request with form data
+        if request.method == 'POST':
+            # Get data from form
+            toxicity_level = request.form.get('toxicity_level', 'Unknown')
+            report_content = request.form.get('report_content', '')
+            
+            # Still use session for other data
+            suggestions = session.get('suggestions', [])
+            xenophobic_words = session.get('xenophobic_words', [])
+            wordcloud_image = session.get('wordcloud_image')
+        else:
+            # Fallback to session data for GET requests
+            toxicity_level = request.args.get('toxicity_level', 'Unknown')
+            suggestions = session.get('suggestions', [])
+            report_content = session.get('report_content', 'No report available')
+            xenophobic_words = session.get('xenophobic_words', [])
+            wordcloud_image = session.get('wordcloud_image')
+        
         transcription = session.get('transcription', None)
+        
+        # Debug info
+        print("=== PDF Generation Debug ===")
+        print(f"Request method: {request.method}")
+        print(f"Toxicity level: {toxicity_level}")
+        print(f"Suggestions: {suggestions}")
+        print(f"Report content length: {len(report_content)}")
+        print(f"Report content starts with: {report_content[:100]}...")
+        print(f"Number of xenophobic words: {len(xenophobic_words) if xenophobic_words else 0}")
+        print(f"Has wordcloud: {wordcloud_image is not None}")
+        print(f"Session keys: {list(session.keys())}")
+        print("===========================")
+        
+        # Provide default suggestions if none are available
+        if not suggestions:
+            suggestions = [
+                "Consider using more inclusive language",
+                "Provide more context when discussing sensitive topics",
+                "Avoid generalizations about groups of people"
+            ]
+        
+        # Provide default report content if none is available or contains error message
+        if not report_content or report_content == 'No report available' or report_content.startswith('Error:'):
+            report_content = "The analysis could not generate a detailed report for this content. Please review the provided suggestions and consider running the analysis again with different content."
+        else:
+            # Clean up the report content one more time
+            report_content = cleanup_report_content(report_content)
         
         # Import reportlab components
         from reportlab.lib.pagesizes import letter
@@ -1314,6 +1390,63 @@ def convert_video_format(input_path, target_format='mp4'):
     except Exception as e:
         print(f"Conversion error: {str(e)}")
         raise
+
+def cleanup_report_content(report_text):
+    """Remove unwanted sections from report content such as JSON blocks and certain headers"""
+    # Remove any mention of "List of Potentially Xenophobic or Problematic Words/Phrases"
+    if report_text:
+        # Remove the xenophobic words list header and any JSON block that follows
+        patterns = [
+            r'\d+\)\s*\*\*List of Potentially Xenophobic or Problematic Words/Phrases\*\*:.*?```json.*',
+            r'\*\*List of Potentially Xenophobic or Problematic Words/Phrases\*\*:.*?```json.*',
+            r'List of Potentially Xenophobic or Problematic Words/Phrases:.*?```json.*',
+            r'List of Potentially Xenophobic or Problematic Words/Phrases:.*?{.*?}',
+            r'\d+\)\s*\*\*Comprehensive Analysis Report\*\*:.*?$',
+            r'\*\*Comprehensive Analysis Report\*\*:.*?$'
+        ]
+        
+        # Apply each pattern
+        for pattern in patterns:
+            report_text = re.sub(pattern, '', report_text, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Additional cleanup: remove trailing colons and metadata markers
+        report_text = re.sub(r'\n\d+\)\s*\*\*.*?\*\*:.*?$', '', report_text, flags=re.MULTILINE)
+        
+        # Clean up multiple newlines
+        report_text = re.sub(r'\n{3,}', '\n\n', report_text)
+        
+    return report_text.strip()
+
+def cleanup_suggestion_text(suggestion):
+    """Fix formatting in suggestions by removing asterisks and fixing punctuation"""
+    if suggestion:
+        # Remove asterisks entirely
+        suggestion = suggestion.replace('**', '')
+        suggestion = suggestion.replace('*', '')
+        
+        # Fix common punctuation issues after removing asterisks
+        
+        # Find the first colon if it exists
+        colon_index = suggestion.find(':')
+        if colon_index > 0:
+            # Get the parts before and after the colon
+            heading = suggestion[:colon_index].strip()
+            content = suggestion[colon_index+1:].strip()
+            
+            # Clean up the heading (remove numbers, etc.)
+            if heading and heading[0].isdigit():
+                # Remove any leading numbers or punctuation from heading
+                heading = ''.join(c for c in heading if not (c.isdigit() or c in '.)- '))
+                heading = heading.strip()
+            
+            # Reconstruct with proper formatting
+            if heading and content:
+                suggestion = f"{heading}: {content}"
+        
+        # Fix multiple spaces
+        suggestion = ' '.join(suggestion.split())
+    
+    return suggestion.strip()
 
 if __name__ == '__main__':
     app.run(debug=True, port=5004) 

@@ -42,9 +42,13 @@
             </div>
             
             <div class="results-actions">
-                <a href="{{ url_for('download_report_pdf', toxicity_level=result.toxicity_level) }}" class="btn btn-primary">
-                    <i class="fas fa-download"></i> Download PDF Report
-                </a>
+                <form action="{{ url_for('download_report_pdf') }}" method="post">
+                    <input type="hidden" name="toxicity_level" value="{{ result.toxicity_level }}">
+                    <input type="hidden" name="report_content" value="{{ result.report }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-download"></i> Download PDF Report
+                    </button>
+                </form>
                 <a href="{{ url_for('index') }}" class="btn btn-secondary">
                     <i class="fas fa-redo"></i> Analyze Another File
                 </a>
