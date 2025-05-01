@@ -15,18 +15,18 @@
                 <h3>Toxicity Level</h3>
                 <div class="meter-container">
                     {% set toxicity_level = result.toxicity_level|lower %}
-                    {% if toxicity_level == 'low' %}
-                        {% set meter_value = 25 %}
+                    {% if toxicity_level == 'none' %}
+                        {% set meter_value = 0 %}
                         {% set meter_color = 'green' %}
-                    {% elif toxicity_level == 'medium' %}
-                        {% set meter_value = 50 %}
-                        {% set meter_color = 'orange' %}
+                    {% elif toxicity_level == 'mild' %}
+                        {% set meter_value = 33 %}
+                        {% set meter_color = 'yellow' %}
                     {% elif toxicity_level == 'high' %}
-                        {% set meter_value = 75 %}
-                        {% set meter_color = 'red' %}
-                    {% elif toxicity_level == 'very high' %}
+                        {% set meter_value = 67 %}
+                        {% set meter_color = 'orange' %}
+                    {% elif toxicity_level == 'max' %}
                         {% set meter_value = 100 %}
-                        {% set meter_color = 'dark-red' %}
+                        {% set meter_color = 'red' %}
                     {% else %}
                         {% set meter_value = 0 %}
                         {% set meter_color = 'gray' %}

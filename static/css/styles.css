@@ -675,15 +675,19 @@ footer {
 }
 
 .meter-green {
-    background-color: var(--success-color);
+    background-color: #4CAF50; /* Green color for Low */
+}
+
+.meter-yellow {
+    background-color: #FFD700; /* Yellow color for Mild */
 }
 
 .meter-orange {
-    background-color: var(--warning-color);
+    background-color: #FF9800; /* Orange color for Medium/High */
 }
 
 .meter-red {
-    background-color: var(--danger-color);
+    background-color: #F44336; /* Red color for High/Max */
 }
 
 .meter-dark-red {
@@ -708,17 +712,22 @@ footer {
 
 .toxicity-green {
     background-color: rgba(16, 185, 129, 0.1);
-    color: var(--success-color);
+    color: #4CAF50;
+}
+
+.toxicity-yellow {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #FFD700;
 }
 
 .toxicity-orange {
     background-color: rgba(245, 158, 11, 0.1);
-    color: var(--warning-color);
+    color: #FF9800;
 }
 
 .toxicity-red {
     background-color: rgba(239, 68, 68, 0.1);
-    color: var(--danger-color);
+    color: #F44336;
 }
 
 .toxicity-dark-red {
