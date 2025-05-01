@@ -564,24 +564,33 @@ def analyze_text(file_path):
                 # Set appropriate font based on operating system
                 if system == 'Darwin':  # macOS
                     possible_fonts = [
+                        '/System/Library/Fonts/ArialUnicodeMS.ttf',  # Best for multilingual support
                         '/System/Library/Fonts/STHeiti Light.ttc',  # Chinese
-                        '/System/Library/Fonts/AppleGothic.ttf',    # Korean + some Chinese
-                        '/System/Library/Fonts/Arial Unicode.ttf',  # Unicode
                         '/Library/Fonts/Arial Unicode.ttf',         # Alternative location
+                        '/System/Library/Fonts/AppleGothic.ttf',    # Korean + some Chinese
                         '/System/Library/Fonts/Helvetica.ttc',      # Common fallback
+                        # Arabic-specific fonts
+                        '/Library/Fonts/Damascus.ttc',              # Good for Arabic
+                        '/System/Library/Fonts/GeezaPro.ttc',       # macOS Arabic font
                     ]
                 elif system == 'Windows':
                     possible_fonts = [
+                        'C:\\Windows\\Fonts\\arialuni.ttf',         # Arial Unicode - best
                         'C:\\Windows\\Fonts\\arial.ttf',
-                        'C:\\Windows\\Fonts\\arialuni.ttf',         # Arial Unicode
                         'C:\\Windows\\Fonts\\seguisym.ttf',         # Segoe UI Symbol
                         'C:\\Windows\\Fonts\\micross.ttf',          # Microsoft Sans Serif
+                        # Arabic-specific fonts
+                        'C:\\Windows\\Fonts\\arabtype.ttf',         # Arabic Typesetting
+                        'C:\\Windows\\Fonts\\meiryo.ttc',           # Good multilingual support
+                        'C:\\Windows\\Fonts\\segoeui.ttf',          # Segoe UI
                     ]
                 else:  # Linux and others
                     possible_fonts = [
+                        '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf',  # Arabic specific
+                        '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf', # Arabic specific
+                        '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
                         '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
                         '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-                        '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
                         '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
                     ]
                 
@@ -592,7 +601,41 @@ def analyze_text(file_path):
                         print(f"Using font: {font}")
                         break
                 
-                # Configure WordCloud with multilingual support
+                # If no font found, try a more extensive search for fonts with Arabic support
+                if not font_path:
+                    print("No suitable font found in standard locations, searching for any Arabic-compatible font...")
+                    try:
+                        from matplotlib.font_manager import FontManager
+                        
+                        # Get all fonts matplotlib knows about
+                        font_manager = FontManager()
+                        font_list = font_manager.ttflist
+                        
+                        # Try to find any Arabic-compatible font
+                        for font in font_list:
+                            try:
+                                # Check if font might support Arabic (this is a heuristic)
+                                if any(name in font.name.lower() for name in ['arabic', 'naskh', 'kufi', 'unicode', 'noto']):
+                                    font_path = font.fname
+                                    print(f"Found Arabic-compatible font: {font.name} at {font_path}")
+                                    break
+                            except:
+                                continue
+                    except Exception as e:
+                        print(f"Error during font search: {e}")
+                
+                # Create custom preprocessor for Arabic text
+                def arabic_preprocessor(text):
+                    # Join words with space
+                    if isinstance(text, list):
+                        text = " ".join(text)
+                    return text
+                
+                # Improved regex pattern for Arabic word boundaries
+                # This regex handles Arabic characters, Latin characters, and numbers
+                word_pattern = r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u1EE00-\u1EEFF\w]+'
+                
+                # Configure WordCloud with better multilingual support
                 wordcloud = WordCloud(
                     width=800, 
                     height=400, 
@@ -601,13 +644,14 @@ def analyze_text(file_path):
                     contour_width=1, 
                     contour_color='steelblue',
                     font_path=font_path,  # Add font support for multiple languages
-                    regexp=r"\w[\w']+",   # Use more inclusive regex pattern
+                    regexp=word_pattern,   # Improved regex for Arabic and other scripts
                     collocations=False,   # Avoid duplicate word pairs
                     normalize_plurals=False,  # Better for multilingual text
                     include_numbers=False,
-                    min_word_length=1,   # Include single-character words (important for Chinese)
-                    max_words=100
-                ).generate(text)
+                    min_word_length=1,   # Include single-character words
+                    max_words=100,
+                    prefer_horizontal=0.9,  # Allow some vertical words
+                ).generate_from_text(arabic_preprocessor(text))
                 
                 # Convert the image to a base64 string to embed in HTML
                 img_buffer = BytesIO()
