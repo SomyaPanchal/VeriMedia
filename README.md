@@ -108,4 +108,51 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - Powered by OpenAI's GPT-4o and Whisper API for content analysis and transcription
-- Developed as part of the UNICC (United Nations International Computing Centre) project 
+- Developed as part of the UNICC (United Nations International Computing Centre) project
+
+## Fine-Tuning for Custom Toxicity Classification
+
+VeriMedia supports fine-tuning GPT-3.5 Turbo for more accurate toxicity classification across multiple languages and content types. This is particularly useful if you have labeled examples in different languages.
+
+### Preparing the Fine-Tuning Data
+
+1. Organize your labeled content in one of these formats:
+   - **Directory structure**: Place files in directories like `data/training/text/none/`, `data/training/text/mild/`, etc.
+   - **CSV file**: Create a CSV with columns for content, toxicity level, and content type
+
+2. Run the data preparation script:
+   ```
+   python prepare_fine_tuning.py --input-type directory --input data/training --output data/fine_tuning
+   ```
+   or
+   ```
+   python prepare_fine_tuning.py --input-type csv --input data/your_labeled_data.csv --content-col "content" --label-col "toxicity" --type-col "content_type"
+   ```
+
+3. This will create JSONL files in `data/fine_tuning/` suitable for OpenAI fine-tuning.
+
+### Running the Fine-Tuning
+
+1. Make sure your OpenAI API key is set in `.env`
+
+2. Run the fine-tuning script:
+   ```
+   python run_fine_tuning.py --training-file data/fine_tuning/training.jsonl --validation-file data/fine_tuning/validation.jsonl
+   ```
+
+3. The script will monitor the fine-tuning process and output the fine-tuned model ID when complete.
+
+4. Add the fine-tuned model ID to your `.env` file:
+   ```
+   FINE_TUNED_MODEL=ft:gpt-3.5-turbo:your-org:toxicity-classifier:123
+   ```
+
+5. Restart VeriMedia - it will automatically use your fine-tuned model for classification.
+
+### Fine-Tuning Architecture
+
+When using a fine-tuned model, VeriMedia employs a two-stage approach:
+1. Use the fine-tuned model for toxicity classification (None, Mild, High, Max)
+2. Use GPT-4o for generating detailed suggestions and reports based on the classification
+
+This approach provides more accurate and consistent toxicity assessments while maintaining the high quality of suggestions and reports. 

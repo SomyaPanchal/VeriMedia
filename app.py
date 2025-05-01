@@ -46,8 +46,10 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 TEMP_AUDIO_DIR = os.path.join(app.config['UPLOAD_FOLDER'], 'temp_audio')
 os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 
-# OpenAI API key (will be set later)
+# Initialize OpenAI API key (will be set later)
 openai_api_key = os.environ.get('OPENAI_API_KEY')
+# Get fine-tuned model if available
+fine_tuned_model = os.environ.get('FINE_TUNED_MODEL')
 client = OpenAI(
     api_key=openai_api_key,
     http_client=httpx.Client()
@@ -437,18 +439,53 @@ def analyze_text(file_path):
             content_truncated = False
         
         # Call OpenAI from analyze_text function
-        analysis_response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the text content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
-                {"role": "user", "content": f"Analyze the following text content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, 3) A comprehensive analysis report, and 4) A list of potentially xenophobic or problematic words/phrases found in the text. Format the list of xenophobic words as JSON in this format: {{\"xenophobic_words\": [\"word1\", \"word2\", ...]}}. Do not use any bold text or markdown formatting in your response.\n\nContent: {analyzed_content}"}
-            ],
-            temperature=0.3,
-            max_tokens=1000
-        )
-        
-        # Extract the analysis from the response
-        analysis_text = analysis_response.choices[0].message.content
+        # Use fine-tuned model for classification if available
+        if fine_tuned_model and not content_truncated:
+            # For fine-tuned model, use a simpler prompt focused just on classification
+            classification_response = client.chat.completions.create(
+                model=fine_tuned_model,
+                messages=[
+                    {"role": "system", "content": "You are an expert analyzing text content for ethical standards. Classify the toxicity level."},
+                    {"role": "user", "content": f"Analyze the following text content for harmful language, misinformation, and problematic content. Content: {analyzed_content}"}
+                ],
+                temperature=0.1,
+                max_tokens=20  # Short response for just the classification
+            )
+            
+            # Extract the toxicity level from the response
+            classification_text = classification_response.choices[0].message.content
+            toxicity_level = "Medium"  # Default
+            
+            # Parse the toxicity level
+            if "toxicity level" in classification_text.lower():
+                for level in ["none", "mild", "high", "max"]:
+                    if level in classification_text.lower():
+                        toxicity_level = level.capitalize()
+                        break
+            
+            # Now use GPT-4o just for suggestions and report
+            analysis_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting. Your task is to provide detailed suggestions and analysis based on the given toxicity level. Do not try to re-classify the content or contradict the provided toxicity level."},
+                    {"role": "user", "content": f"This content has been classified with a toxicity level of {toxicity_level}. Based on this classification, provide: 1) Specific suggestions for improvement, 2) A comprehensive analysis report, and 3) A list of potentially problematic words/phrases found in the text. Format the list of problematic words as JSON in this format: {{\"xenophobic_words\": [\"word1\", \"word2\", ...]}}. Do not use any bold text or markdown formatting in your response.\n\nContent: {analyzed_content}"}
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+            analysis_text = analysis_response.choices[0].message.content
+        else:
+            # Use the original approach with GPT-4o for both classification and analysis
+            analysis_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the text content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
+                    {"role": "user", "content": f"Analyze the following text content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, 3) A comprehensive analysis report, and 4) A list of potentially xenophobic or problematic words/phrases found in the text. Format the list of xenophobic words as JSON in this format: {{\"xenophobic_words\": [\"word1\", \"word2\", ...]}}. Do not use any bold text or markdown formatting in your response.\n\nContent: {analyzed_content}"}
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+            analysis_text = analysis_response.choices[0].message.content
         
         # Parse the analysis to extract toxicity level, suggestions, and report
         toxicity_level = "Medium"  # Default
@@ -750,19 +787,53 @@ def analyze_audio(file_path):
         # Store the full transcription
         full_transcription = transcribed_text
         
-        # Call OpenAI from analyze_audio function
-        analysis_response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed audio content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
-                {"role": "user", "content": f"Analyze the following transcribed audio content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
-            ],
-            temperature=0.3,
-            max_tokens=1000
-        )
-        
-        # Extract the analysis from the response
-        analysis_text = analysis_response.choices[0].message.content
+        # Use fine-tuned model for classification if available
+        if fine_tuned_model:
+            # For fine-tuned model, use a simpler prompt focused just on classification
+            classification_response = client.chat.completions.create(
+                model=fine_tuned_model,
+                messages=[
+                    {"role": "system", "content": "You are an expert analyzing audio transcripts for ethical standards. Classify the toxicity level."},
+                    {"role": "user", "content": f"Analyze the following transcribed audio content for harmful language, misinformation, and problematic content. Transcribed content: {transcribed_text}"}
+                ],
+                temperature=0.1,
+                max_tokens=20  # Short response for just the classification
+            )
+            
+            # Extract the toxicity level from the response
+            classification_text = classification_response.choices[0].message.content
+            toxicity_level = "Medium"  # Default
+            
+            # Parse the toxicity level
+            if "toxicity level" in classification_text.lower():
+                for level in ["none", "mild", "high", "max"]:
+                    if level in classification_text.lower():
+                        toxicity_level = level.capitalize()
+                        break
+            
+            # Now use GPT-4o just for suggestions and report
+            analysis_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting. Your task is to provide detailed suggestions and analysis based on the given toxicity level. Do not try to re-classify the content or contradict the provided toxicity level."},
+                    {"role": "user", "content": f"This audio transcript has been classified with a toxicity level of {toxicity_level}. Based on this classification, provide: 1) Specific suggestions for improvement, and 2) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+            analysis_text = analysis_response.choices[0].message.content
+        else:
+            # Use the original approach with GPT-4o for both classification and analysis
+            analysis_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed audio content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
+                    {"role": "user", "content": f"Analyze the following transcribed audio content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+            analysis_text = analysis_response.choices[0].message.content
         
         # Parse the analysis to extract toxicity level, suggestions, and report
         toxicity_level = "Medium"  # Default
@@ -1067,20 +1138,53 @@ def analyze_video(file_path):
             # Store the full transcription
             full_transcription = transcribed_text
             
-            # Analyze transcribed text
-            analysis_response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed video content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
-                    {"role": "user", "content": f"Analyze the following transcribed video content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
-                ],
-                temperature=0.3,
-                max_tokens=1000
-            )
-            
-            # Extract analysis
-            analysis_text = analysis_response.choices[0].message.content
-            print("Content analysis complete")
+            # Use fine-tuned model for classification if available
+            if fine_tuned_model:
+                # For fine-tuned model, use a simpler prompt focused just on classification
+                classification_response = client.chat.completions.create(
+                    model=fine_tuned_model,
+                    messages=[
+                        {"role": "system", "content": "You are an expert analyzing video transcripts for ethical standards. Classify the toxicity level."},
+                        {"role": "user", "content": f"Analyze the following transcribed video content for harmful language, misinformation, and problematic content. Transcribed content: {transcribed_text}"}
+                    ],
+                    temperature=0.1,
+                    max_tokens=20  # Short response for just the classification
+                )
+                
+                # Extract the toxicity level from the response
+                classification_text = classification_response.choices[0].message.content
+                toxicity_level = "Medium"  # Default
+                
+                # Parse the toxicity level
+                if "toxicity level" in classification_text.lower():
+                    for level in ["none", "mild", "high", "max"]:
+                        if level in classification_text.lower():
+                            toxicity_level = level.capitalize()
+                            break
+                
+                # Now use GPT-4o just for suggestions and report
+                analysis_response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting. Your task is to provide detailed suggestions and analysis based on the given toxicity level. Do not try to re-classify the content or contradict the provided toxicity level."},
+                        {"role": "user", "content": f"This video transcript has been classified with a toxicity level of {toxicity_level}. Based on this classification, provide: 1) Specific suggestions for improvement, and 2) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
+                    ],
+                    temperature=0.3,
+                    max_tokens=1000
+                )
+                analysis_text = analysis_response.choices[0].message.content
+            else:
+                # Use the original approach with GPT-4o for both classification and analysis
+                analysis_response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed video content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
+                        {"role": "user", "content": f"Analyze the following transcribed video content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
+                    ],
+                    temperature=0.3,
+                    max_tokens=1000
+                )
+                analysis_text = analysis_response.choices[0].message.content
             
             # Parse analysis
             toxicity_level = "Medium"  # Default
