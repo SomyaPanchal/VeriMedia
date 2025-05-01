@@ -11,12 +11,11 @@ import matplotlib
 # Set non-interactive backend before importing pyplot
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from wordcloud import WordCloud, STOPWORDS
+from wordcloud import WordCloud
 import base64
 from io import BytesIO
 import re
 import json
-import matplotlib.font_manager as fm
 
 # Load environment variables
 load_dotenv()
@@ -624,24 +623,12 @@ def analyze_text(file_path):
                 # Join words with space, but repeat problematic words according to their severity
                 text = " ".join(xenophobic_words)
                 
-                # Get a suitable font for Chinese characters
-                chinese_font_path = get_chinese_font()
-                
-                # Generate the word cloud with appropriate font
-                wordcloud_params = {
-                    'width': 800, 
-                    'height': 400,
-                    'background_color': 'white',
-                    'colormap': 'viridis',
-                    'contour_width': 1,
-                    'contour_color': 'steelblue'
-                }
-                
-                # Add font_path only if a suitable font was found
-                if chinese_font_path:
-                    wordcloud_params['font_path'] = chinese_font_path
-                
-                wordcloud = WordCloud(**wordcloud_params).generate(text)
+                # Generate the word cloud
+                wordcloud = WordCloud(width=800, height=400, 
+                                    background_color='white',
+                                    colormap='viridis',
+                                    contour_width=1, 
+                                    contour_color='steelblue').generate(text)
                 
                 # Convert the image to a base64 string to embed in HTML
                 img_buffer = BytesIO()
@@ -860,7 +847,7 @@ def analyze_audio(file_path):
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed audio content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
-                {"role": "user", "content": f"Analyze the following transcribed audio content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, 3) A comprehensive analysis report, and 4) A list of potentially xenophobic or problematic words/phrases found in the audio. Format the list of xenophobic words as JSON in this format: {{\"xenophobic_words\": [\"word1\", \"word2\", ...]}}. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
+                {"role": "user", "content": f"Analyze the following transcribed audio content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
             ],
             temperature=0.3,
             max_tokens=2000
@@ -961,9 +948,7 @@ def analyze_audio(file_path):
                 'toxicity_level': toxicity_level,
                 'suggestions': suggestions,
                 'report': report,
-                'transcription': full_transcription,
-                'xenophobic_words': [],
-                'wordcloud_image': None
+                'transcription': full_transcription
             }
         
         # Enhance suggestions based on toxicity level
@@ -1044,49 +1029,11 @@ def analyze_audio(file_path):
                     words = re.split(r'[,;"\'\s]+', cleaned)
                     xenophobic_words = [w.strip() for w in words if w.strip()]
         
-        # Generate word cloud if xenophobic words were found
-        wordcloud_image = None
-        if xenophobic_words:
-            try:
-                # Join words with space, but repeat problematic words according to their severity
-                text = " ".join(xenophobic_words)
-                
-                # Get a suitable font for Chinese characters
-                chinese_font_path = get_chinese_font()
-                
-                # Generate the word cloud with appropriate font
-                wordcloud_params = {
-                    'width': 800, 
-                    'height': 400,
-                    'background_color': 'white',
-                    'colormap': 'viridis',
-                    'contour_width': 1,
-                    'contour_color': 'steelblue'
-                }
-                
-                # Add font_path only if a suitable font was found
-                if chinese_font_path:
-                    wordcloud_params['font_path'] = chinese_font_path
-                
-                wordcloud = WordCloud(**wordcloud_params).generate(text)
-                
-                # Convert the image to a base64 string to embed in HTML
-                img_buffer = BytesIO()
-                # Save directly to buffer without using plt
-                wordcloud.to_image().save(img_buffer, format='PNG')
-                img_buffer.seek(0)
-                
-                wordcloud_image = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
-            except Exception as wc_error:
-                print(f"Error generating word cloud: {str(wc_error)}")
-        
         return {
             'toxicity_level': toxicity_level,
             'suggestions': suggestions,
             'report': report,
-            'transcription': full_transcription,
-            'xenophobic_words': xenophobic_words,
-            'wordcloud_image': wordcloud_image
+            'transcription': full_transcription
         }
     
     except Exception as e:
@@ -1399,7 +1346,7 @@ def analyze_video(file_path):
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed video content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
-                    {"role": "user", "content": f"Analyze the following transcribed video content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, 3) A comprehensive analysis report, and 4) A list of potentially xenophobic or problematic words/phrases found in the video. Format the list of xenophobic words as JSON in this format: {{\"xenophobic_words\": [\"word1\", \"word2\", ...]}}. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
+                    {"role": "user", "content": f"Analyze the following transcribed video content for xenophobic language, misinformation, and harmful content. Provide: 1) A toxicity level (None, Mild, High, or Max), 2) Specific suggestions for improvement, and 3) A comprehensive analysis report. Do not use any bold text or markdown formatting in your response.\n\nTranscribed content: {transcribed_text}"}
                 ],
                 temperature=0.3,
                 max_tokens=2000
@@ -1504,9 +1451,7 @@ def analyze_video(file_path):
                     'toxicity_level': toxicity_level,
                     'suggestions': suggestions,
                     'report': report,
-                    'transcription': full_transcription,
-                    'xenophobic_words': [],
-                    'wordcloud_image': None
+                    'transcription': full_transcription
                 }
             
             # Enhance suggestions based on toxicity level
@@ -1650,49 +1595,11 @@ def analyze_video(file_path):
                         words = re.split(r'[,;"\'\s]+', cleaned)
                         xenophobic_words = [w.strip() for w in words if w.strip()]
             
-            # Generate word cloud if xenophobic words were found
-            wordcloud_image = None
-            if xenophobic_words:
-                try:
-                    # Join words with space, but repeat problematic words according to their severity
-                    text = " ".join(xenophobic_words)
-                    
-                    # Get a suitable font for Chinese characters
-                    chinese_font_path = get_chinese_font()
-                    
-                    # Generate the word cloud with appropriate font
-                    wordcloud_params = {
-                        'width': 800, 
-                        'height': 400,
-                        'background_color': 'white',
-                        'colormap': 'viridis',
-                        'contour_width': 1,
-                        'contour_color': 'steelblue'
-                    }
-                    
-                    # Add font_path only if a suitable font was found
-                    if chinese_font_path:
-                        wordcloud_params['font_path'] = chinese_font_path
-                    
-                    wordcloud = WordCloud(**wordcloud_params).generate(text)
-                    
-                    # Convert the image to a base64 string to embed in HTML
-                    img_buffer = BytesIO()
-                    # Save directly to buffer without using plt
-                    wordcloud.to_image().save(img_buffer, format='PNG')
-                    img_buffer.seek(0)
-                    
-                    wordcloud_image = base64.b64encode(img_buffer.getvalue()).decode('utf-8')
-                except Exception as wc_error:
-                    print(f"Error generating word cloud: {str(wc_error)}")
-            
             return {
                 'toxicity_level': toxicity_level,
                 'suggestions': suggestions,
                 'report': report,
-                'transcription': full_transcription,
-                'xenophobic_words': xenophobic_words,
-                'wordcloud_image': wordcloud_image
+                'transcription': full_transcription
             }
             
         except Exception as processing_error:
@@ -2148,38 +2055,6 @@ def cleanup_suggestion_text(suggestion):
         suggestion = ' '.join(suggestion.split())
     
     return suggestion.strip()
-
-# Find a suitable font for Chinese characters
-def get_chinese_font():
-    # Try to find a font that supports Chinese characters
-    # Common fonts that support Chinese characters
-    chinese_fonts = [
-        'Arial Unicode MS', 
-        'Microsoft YaHei', 
-        'WenQuanYi Micro Hei',
-        'Noto Sans CJK SC', 
-        'Noto Sans CJK TC',
-        'Noto Sans CJK JP',
-        'SimHei', 
-        'SimSun', 
-        'FangSong',
-        'STHeiti'
-    ]
-    
-    for font in chinese_fonts:
-        try:
-            # Check if the font is available
-            font_path = fm.findfont(fm.FontProperties(family=font))
-            if font_path and 'ttf' in font_path.lower():
-                print(f"Using font for Chinese characters: {font}")
-                return font_path
-        except:
-            continue
-    
-    # If no suitable font is found, use the default font
-    # This won't display Chinese characters correctly, but will prevent crashes
-    print("Warning: No suitable font for Chinese characters found. Using default font.")
-    return None
 
 if __name__ == '__main__':
     app.run(debug=True, port=5004) 
