@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}About VeriMedia - AI-Driven Media Analysis Tool{% endblock %}
+
+{% block content %}
+<section class="about-hero">
+    <div class="container">
+        <div class="about-hero-content">
+            <h1>About VeriMedia</h1>
+            <p class="lead">
+                An AI-driven media analysis tool designed to enhance ethical reporting on refugee and migration issues.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="about-section">
+    <div class="container">
+        <div class="about-grid">
+            <div class="about-content">
+                <h2>Our Mission</h2>
+                <p>
+                    VeriMedia is an innovative AI-driven media analysis tool developed for UNICC to enhance the capacity of media outlets to report ethically and accurately on topics related to refugees, migrants, and other forcibly displaced populations.
+                </p>
+                <p>
+                    Our mission is to support the detection and prevention of xenophobic language, misinformation, and harmful content in media environments, ultimately fostering more informed and empathetic public discourse.
+                </p>
+                
+                <h2>The Challenge</h2>
+                <p>
+                    Media coverage plays a crucial role in shaping public perception and policy decisions regarding refugees and migrants. However, reporting on these topics can sometimes include harmful stereotypes, xenophobic language, or misinformation that contributes to negative attitudes and discrimination.
+                </p>
+                <p>
+                    Journalists and media professionals often face challenges in identifying potentially harmful content in their reporting, especially when working under tight deadlines or when covering complex humanitarian situations.
+                </p>
+                
+                <h2>Our Solution</h2>
+                <p>
+                    VeriMedia leverages advanced artificial intelligence to analyze media content across multiple formats (text, audio, and video) and languages. The tool provides:
+                </p>
+                <ul class="feature-list">
+                    <li>
+                        <span class="feature-icon"><i class="fas fa-shield-alt"></i></span>
+                        <div class="feature-text">
+                            <strong>Toxicity Detection:</strong> Identification of potentially harmful or xenophobic language in content.
+                        </div>
+                    </li>
+                    <li>
+                        <span class="feature-icon"><i class="fas fa-lightbulb"></i></span>
+                        <div class="feature-text">
+                            <strong>Improvement Suggestions:</strong> Actionable recommendations to enhance content inclusivity and accuracy.
+                        </div>
+                    </li>
+                    <li>
+                        <span class="feature-icon"><i class="fas fa-file-alt"></i></span>
+                        <div class="feature-text">
+                            <strong>Comprehensive Reports:</strong> Detailed analysis to understand areas for improvement.
+                        </div>
+                    </li>
+                    <li>
+                        <span class="feature-icon"><i class="fas fa-globe"></i></span>
+                        <div class="feature-text">
+                            <strong>Multi-language Support:</strong> Analysis capabilities across multiple languages for global reporting.
+                        </div>
+                    </li>
+                    <li>
+                        <span class="feature-icon"><i class="fas fa-microphone"></i></span>
+                        <div class="feature-text">
+                            <strong>Multimodal Analysis:</strong> Support for text, audio, and video content analysis.
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="about-sidebar">
+                <div class="about-card">
+                    <h3>About UNICC</h3>
+                    <p>
+                        The United Nations International Computing Centre (UNICC) provides IT services to the UN family and related international organizations.
+                    </p>
+                    <p>
+                        UNICC's mission is to provide ICT services that help partners achieve their goals through innovative, reliable, and secure digital business solutions.
+                    </p>
+                    <a href="https://www.unicc.org/" target="_blank" class="btn btn-outline">Visit UNICC Website</a>
+                </div>
+                
+                <div class="about-card">
+                    <h3>Technology</h3>
+                    <p>
+                        VeriMedia uses state-of-the-art AI technologies including:
+                    </p>
+                    <ul class="tech-list">
+                        <li><i class="fas fa-check"></i> Natural Language Processing</li>
+                        <li><i class="fas fa-check"></i> Speech Recognition</li>
+                        <li><i class="fas fa-check"></i> Computer Vision</li>
+                        <li><i class="fas fa-check"></i> Machine Learning</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="team-section">
+    <div class="container">
+        <div class="section-header">
+            <h2>Our Team</h2>
+            <p>The dedicated professionals behind VeriMedia</p>
+        </div>
+        
+        <div class="team-grid">
+            <div class="team-member">
+                <div class="member-photo">
+                    <img src="{{ url_for('static', filename='images/fengyu.jpg') }}" alt="Fengyu Yang">
+                </div>
+                <h3>Fengyu Yang</h3>
+                <p class="member-role">Text Content Specialist</p>
+                <p class="member-bio">
+                    Fengyu is a text content specialist with a passion for ethical reporting.
+                </p>
+            </div>
+            
+            <div class="team-member">
+                <div class="member-photo">
+                    <img src="{{ url_for('static', filename='images/qianwen.jpg') }}" alt="Qianwen Zhu">
+                </div>
+                <h3>Qianwen Zhu</h3>
+                <p class="member-role">Audio Content Specialist</p>
+                <p class="member-bio">
+                    Qianwen is an audio content specialist with a passion for ethical reporting.
+                </p>
+            </div>
+            
+            <div class="team-member">
+                <div class="member-photo">
+                    <img src="{{ url_for('static', filename='images/qisheng.jpg') }}" alt="Qi Sheng">
+                </div>
+                <h3>Qi Sheng</h3>
+                <p class="member-role">Video Content Specialist</p>
+                <p class="member-bio">
+                    Qi Sheng is a video content specialist with a passion for ethical reporting.
+                </p>
+            </div>
+            
+            <div class="team-member">
+                <div class="member-photo">
+                    <img src="{{ url_for('static', filename='images/somya.jpg') }}" alt="Somya Panchal">
+                </div>
+                <h3>Somya Panchal</h3>
+                <p class="member-role">Integration and System Specialist</p>
+                <p class="member-bio">
+                    Somya is an integration and system specialist with a focus on creating accessible and intuitive user experiences.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="cta-content">
+        <h2>Ready to Try VeriMedia?</h2>
+        <p>Start analyzing your content today and contribute to more ethical reporting on refugee and migration issues.</p>
+        <a href="{{ url_for('index') }}#upload-section" class="btn btn-primary">Get Started</a>
+    </div>
+</section>
+{% endblock %} 

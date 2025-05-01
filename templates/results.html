@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Results - VeriMedia{% endblock %}
+
+{% block content %}
+<section class="results-section">
+    <div class="section-header">
+        <h1>Media Analysis Results</h1>
+        <p>AI-powered analysis of your content</p>
+    </div>
+    
+    <div class="results-container">
+        <div class="results-summary">
+            <div class="toxicity-meter">
+                <h3>Toxicity Level</h3>
+                <div class="meter-container">
+                    {% set toxicity_level = result.toxicity_level|lower %}
+                    {% if toxicity_level == 'none' %}
+                        {% set meter_value = 0 %}
+                        {% set meter_color = 'green' %}
+                    {% elif toxicity_level == 'mild' %}
+                        {% set meter_value = 33 %}
+                        {% set meter_color = 'orange' %}
+                    {% elif toxicity_level == 'high' %}
+                        {% set meter_value = 67 %}
+                        {% set meter_color = 'red' %}
+                    {% elif toxicity_level == 'max' %}
+                        {% set meter_value = 100 %}
+                        {% set meter_color = 'dark-red' %}
+                    {% else %}
+                        {% set meter_value = 0 %}
+                        {% set meter_color = 'gray' %}
+                    {% endif %}
+                    
+                    <div class="meter">
+                        <div class="meter-fill meter-{{ meter_color }}" style="width: {{ meter_value }}%"></div>
+                    </div>
+                    <div class="meter-label">
+                        <span class="toxicity-level toxicity-{{ meter_color }}">{{ result.toxicity_level }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="results-actions">
+                <form action="{{ url_for('download_report_pdf') }}" method="post">
+                    <input type="hidden" name="toxicity_level" value="{{ result.toxicity_level }}">
+                    <input type="hidden" name="report_content" value="{{ result.report }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-download"></i> Download PDF Report
+                    </button>
+                </form>
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                    <i class="fas fa-redo"></i> Analyze Another File
+                </a>
+            </div>
+        </div>
+        
+        <div class="results-tabs">
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="suggestions">Suggestions</button>
+                <button class="tab-btn" data-tab="report">Full Report</button>
+                {% if result.transcription %}
+                <button class="tab-btn" data-tab="transcription">Transcription</button>
+                {% endif %}
+                {% if result.wordcloud_image and result.toxicity_level|lower != 'none' %}
+                <button class="tab-btn" data-tab="wordcloud">Xenophobic Words</button>
+                {% endif %}
+            </div>
+            
+            <div class="tabs-content">
+                <div class="tab-pane active" id="suggestions-tab">
+                    <h3>Improvement Suggestions</h3>
+                    {% if result.toxicity_level|lower == 'none' %}
+                        <div class="positive-words">
+                            <p class="positive-message">Great job! Your content has no toxic elements.</p>
+                            <div class="positive-tags">
+                                <span class="positive-tag">Inclusive</span>
+                                <span class="positive-tag">Ethical</span>
+                                <span class="positive-tag">Balanced</span>
+                                <span class="positive-tag">Respectful</span>
+                                <span class="positive-tag">Fair</span>
+                                <span class="positive-tag">Accurate</span>
+                                <span class="positive-tag">Constructive</span>
+                                <span class="positive-tag">Responsible</span>
+                            </div>
+                        </div>
+                    {% elif result.suggestions %}
+                        <ul class="suggestions-list">
+                            {% for suggestion in result.suggestions %}
+                                <li class="suggestion-item">
+                                    <div class="suggestion-icon">
+                                        <i class="fas fa-lightbulb"></i>
+                                    </div>
+                                    <div class="suggestion-content">
+                                        <p>{{ suggestion }}</p>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="no-data">No suggestions available.</p>
+                    {% endif %}
+                </div>
+                
+                <div class="tab-pane" id="report-tab">
+                    <h3>Comprehensive Report</h3>
+                    <div class="report-content">
+                        {% if result.report %}
+                            <p>{{ result.report|safe }}</p>
+                        {% else %}
+                            <p class="no-data">No report available.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if result.transcription %}
+                <div class="tab-pane" id="transcription-tab">
+                    <h3>Full Transcription</h3>
+                    <div class="transcription-content">
+                        <p>{{ result.transcription|safe }}</p>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if result.wordcloud_image and result.toxicity_level|lower != 'none' %}
+                <div class="tab-pane" id="wordcloud-tab">
+                    <h3>Xenophobic Words Visualization</h3>
+                    <div class="wordcloud-container">
+                        <img src="data:image/png;base64,{{ result.wordcloud_image }}" alt="Word Cloud of Xenophobic Words">
+                        
+                        {% if result.xenophobic_words %}
+                            <div class="words-list">
+                                <h4>Identified Xenophobic Words:</h4>
+                                <div class="tags">
+                                    {% for word in result.xenophobic_words %}
+                                        <span class="tag">{{ word }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Tab switching functionality
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+        
+        tabButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active class from all buttons and panes
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabPanes.forEach(pane => pane.classList.remove('active'));
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
+                // Show corresponding tab pane
+                const tabId = this.getAttribute('data-tab');
+                document.getElementById(`${tabId}-tab`).classList.add('active');
+            });
+        });
+    });
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .positive-words {
+        padding: 15px;
+        background-color: #f0f8f0;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .positive-message {
+        font-size: 18px;
+        color: #2e7d32;
+        margin-bottom: 15px;
+        font-weight: 500;
+    }
+    
+    .positive-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .positive-tag {
+        background-color: #4caf50;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        display: inline-block;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .positive-tag:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+</style>
+{% endblock %} 

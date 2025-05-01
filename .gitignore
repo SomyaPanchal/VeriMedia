@@ -1,0 +1,46 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Flask session files
+flask_session/
+
+# Environment variables and secrets
+.env
+.env.local
+.env.[^e]*
+*.key
+credentials.json
+config.json
+secrets/
+
+!.env.example
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+uploads/
+temp_audio/
+*.tmp
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Log files
+*.log 
