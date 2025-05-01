@@ -11,11 +11,12 @@ import matplotlib
 # Set non-interactive backend before importing pyplot
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from wordcloud import WordCloud
+from wordcloud import WordCloud, STOPWORDS
 import base64
 from io import BytesIO
 import re
 import json
+import matplotlib.font_manager as fm
 
 # Load environment variables
 load_dotenv()
@@ -623,12 +624,24 @@ def analyze_text(file_path):
                 # Join words with space, but repeat problematic words according to their severity
                 text = " ".join(xenophobic_words)
                 
-                # Generate the word cloud
-                wordcloud = WordCloud(width=800, height=400, 
-                                    background_color='white',
-                                    colormap='viridis',
-                                    contour_width=1, 
-                                    contour_color='steelblue').generate(text)
+                # Get a suitable font for Chinese characters
+                chinese_font_path = get_chinese_font()
+                
+                # Generate the word cloud with appropriate font
+                wordcloud_params = {
+                    'width': 800, 
+                    'height': 400,
+                    'background_color': 'white',
+                    'colormap': 'viridis',
+                    'contour_width': 1,
+                    'contour_color': 'steelblue'
+                }
+                
+                # Add font_path only if a suitable font was found
+                if chinese_font_path:
+                    wordcloud_params['font_path'] = chinese_font_path
+                
+                wordcloud = WordCloud(**wordcloud_params).generate(text)
                 
                 # Convert the image to a base64 string to embed in HTML
                 img_buffer = BytesIO()
@@ -2055,6 +2068,38 @@ def cleanup_suggestion_text(suggestion):
         suggestion = ' '.join(suggestion.split())
     
     return suggestion.strip()
+
+# Find a suitable font for Chinese characters
+def get_chinese_font():
+    """Find a font that supports Chinese characters"""
+    # Common fonts that support Chinese characters
+    chinese_fonts = [
+        'Arial Unicode MS', 
+        'Microsoft YaHei', 
+        'WenQuanYi Micro Hei',
+        'Noto Sans CJK SC', 
+        'Noto Sans CJK TC',
+        'Noto Sans CJK JP',
+        'SimHei', 
+        'SimSun', 
+        'FangSong',
+        'STHeiti'
+    ]
+    
+    for font in chinese_fonts:
+        try:
+            # Check if the font is available
+            font_path = fm.findfont(fm.FontProperties(family=font))
+            if font_path and 'ttf' in font_path.lower():
+                print(f"Using font for Chinese characters: {font}")
+                return font_path
+        except:
+            continue
+    
+    # If no suitable font is found, use the default font
+    # This won't display Chinese characters correctly, but will prevent crashes
+    print("Warning: No suitable font for Chinese characters found. Using default font.")
+    return None
 
 if __name__ == '__main__':
     app.run(debug=True, port=5004) 
