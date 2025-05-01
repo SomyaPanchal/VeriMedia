@@ -1,7 +1,8 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, make_response, session
 from werkzeug.utils import secure_filename
 import os
-import openai
+import httpx
+from openai import OpenAI
 from dotenv import load_dotenv
 import tempfile
 import time
@@ -15,6 +16,7 @@ import base64
 from io import BytesIO
 import re
 import json
+import platform
 
 # Load environment variables
 load_dotenv()
@@ -45,7 +47,11 @@ TEMP_AUDIO_DIR = os.path.join(app.config['UPLOAD_FOLDER'], 'temp_audio')
 os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 
 # OpenAI API key (will be set later)
-openai.api_key = os.environ.get('OPENAI_API_KEY')
+openai_api_key = os.environ.get('OPENAI_API_KEY')
+client = OpenAI(
+    api_key=openai_api_key,
+    http_client=httpx.Client()
+)
 
 def convert_video_to_audio(video_path):
     """Convert video to compressed audio format suitable for OpenAI API"""
@@ -357,7 +363,7 @@ def analyze_text(file_path):
     """Analyze text content using OpenAI API"""
     try:
         # Check if OpenAI API key is set
-        if not openai.api_key:
+        if not openai_api_key:
             return {
                 'toxicity_level': 'Error',
                 'suggestions': ['OpenAI API key is not set'],
@@ -431,7 +437,7 @@ def analyze_text(file_path):
             content_truncated = False
         
         # Analyze the text content using GPT
-        analysis_response = openai.chat.completions.create(
+        analysis_response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the text content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
@@ -548,16 +554,63 @@ def analyze_text(file_path):
                 # Join words with space, but repeat problematic words according to their severity
                 text = " ".join(xenophobic_words)
                 
-                # Generate the word cloud
-                wordcloud = WordCloud(width=800, height=400, 
-                                    background_color='white',
-                                    colormap='viridis',
-                                    contour_width=1, 
-                                    contour_color='steelblue').generate(text)
+                # Generate the word cloud with multilingual support
+                # Find system fonts that support multiple languages
+                system = platform.system()
+                
+                # Default font path - will be overridden based on OS
+                font_path = None
+                
+                # Set appropriate font based on operating system
+                if system == 'Darwin':  # macOS
+                    possible_fonts = [
+                        '/System/Library/Fonts/STHeiti Light.ttc',  # Chinese
+                        '/System/Library/Fonts/AppleGothic.ttf',    # Korean + some Chinese
+                        '/System/Library/Fonts/Arial Unicode.ttf',  # Unicode
+                        '/Library/Fonts/Arial Unicode.ttf',         # Alternative location
+                        '/System/Library/Fonts/Helvetica.ttc',      # Common fallback
+                    ]
+                elif system == 'Windows':
+                    possible_fonts = [
+                        'C:\\Windows\\Fonts\\arial.ttf',
+                        'C:\\Windows\\Fonts\\arialuni.ttf',         # Arial Unicode
+                        'C:\\Windows\\Fonts\\seguisym.ttf',         # Segoe UI Symbol
+                        'C:\\Windows\\Fonts\\micross.ttf',          # Microsoft Sans Serif
+                    ]
+                else:  # Linux and others
+                    possible_fonts = [
+                        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+                        '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+                        '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
+                    ]
+                
+                # Find the first available font
+                for font in possible_fonts:
+                    if os.path.exists(font):
+                        font_path = font
+                        print(f"Using font: {font}")
+                        break
+                
+                # Configure WordCloud with multilingual support
+                wordcloud = WordCloud(
+                    width=800, 
+                    height=400, 
+                    background_color='white',
+                    colormap='viridis',
+                    contour_width=1, 
+                    contour_color='steelblue',
+                    font_path=font_path,  # Add font support for multiple languages
+                    regexp=r"\w[\w']+",   # Use more inclusive regex pattern
+                    collocations=False,   # Avoid duplicate word pairs
+                    normalize_plurals=False,  # Better for multilingual text
+                    include_numbers=False,
+                    min_word_length=1,   # Include single-character words (important for Chinese)
+                    max_words=100
+                ).generate(text)
                 
                 # Convert the image to a base64 string to embed in HTML
                 img_buffer = BytesIO()
-                # Save directly to buffer without using plt
                 wordcloud.to_image().save(img_buffer, format='PNG')
                 img_buffer.seek(0)
                 
@@ -587,7 +640,7 @@ def analyze_audio(file_path):
     """Analyze audio content using OpenAI Audio API for transcription and GPT for analysis"""
     try:
         # Check if OpenAI API key is set
-        if not openai.api_key:
+        if not openai_api_key:
             return {
                 'toxicity_level': 'Error',
                 'suggestions': ['OpenAI API key is not set'],
@@ -617,7 +670,7 @@ def analyze_audio(file_path):
         # First try direct transcription
         try:
             with open(file_path, "rb") as audio_file:
-                transcript_response = openai.audio.transcriptions.create(
+                transcript_response = client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
                     response_format="text"
@@ -648,7 +701,7 @@ def analyze_audio(file_path):
                 
                 # Try transcription with the converted file
                 with open(temp_file_path, "rb") as audio_file:
-                    transcript_response = openai.audio.transcriptions.create(
+                    transcript_response = client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
                         response_format="text"
@@ -689,7 +742,7 @@ def analyze_audio(file_path):
         full_transcription = transcribed_text
         
         # Analyze the transcribed text using GPT
-        analysis_response = openai.chat.completions.create(
+        analysis_response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed audio content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
@@ -786,7 +839,7 @@ def analyze_video(file_path):
     """Analyze video content by extracting audio and sending to OpenAI Audio API"""
     try:
         # Check if OpenAI API key is set
-        if not openai.api_key:
+        if not openai_api_key:
             return {
                 'toxicity_level': 'Error',
                 'suggestions': ['OpenAI API key is not set'],
@@ -965,7 +1018,7 @@ def analyze_video(file_path):
             print("Transcribing extracted audio...")
             try:
                 with open(temp_audio_path, "rb") as audio_file:
-                    transcript_response = openai.audio.transcriptions.create(
+                    transcript_response = client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
                         response_format="text"
@@ -997,7 +1050,7 @@ def analyze_video(file_path):
             full_transcription = transcribed_text
             
             # Analyze transcribed text
-            analysis_response = openai.chat.completions.create(
+            analysis_response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are an expert in analyzing media content for ethical reporting on topics related to refugees, migrants, and other forcibly displaced populations. Your task is to analyze the transcribed video content for xenophobic language, misinformation, and harmful content. Do not use bold formatting, markdown formatting, or any special text formatting in your response."},
