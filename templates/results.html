@@ -69,22 +69,42 @@
             
             <div class="tabs-content">
                 <div class="tab-pane active" id="suggestions-tab">
-                    <h3>Improvement Suggestions</h3>
-                    {% if result.suggestions %}
-                        <ul class="suggestions-list">
-                            {% for suggestion in result.suggestions %}
-                                <li class="suggestion-item">
-                                    <div class="suggestion-icon">
-                                        <i class="fas fa-lightbulb"></i>
-                                    </div>
-                                    <div class="suggestion-content">
-                                        <p>{{ suggestion }}</p>
-                                    </div>
-                                </li>
-                            {% endfor %}
-                        </ul>
+                    {% if result.toxicity_level|lower == 'none' %}
+                        <h3>Content Excellence</h3>
+                        {% if result.suggestions %}
+                            <ul class="suggestions-list praise-list">
+                                {% for suggestion in result.suggestions %}
+                                    <li class="suggestion-item praise-item">
+                                        <div class="suggestion-icon praise-icon">
+                                            <i class="fas fa-check-circle"></i>
+                                        </div>
+                                        <div class="suggestion-content">
+                                            <p>{{ suggestion }}</p>
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="no-data">No praise information available.</p>
+                        {% endif %}
                     {% else %}
-                        <p class="no-data">No suggestions available.</p>
+                        <h3>Improvement Suggestions</h3>
+                        {% if result.suggestions %}
+                            <ul class="suggestions-list">
+                                {% for suggestion in result.suggestions %}
+                                    <li class="suggestion-item">
+                                        <div class="suggestion-icon">
+                                            <i class="fas fa-lightbulb"></i>
+                                        </div>
+                                        <div class="suggestion-content">
+                                            <p>{{ suggestion }}</p>
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="no-data">No suggestions available.</p>
+                        {% endif %}
                     {% endif %}
                 </div>
                 

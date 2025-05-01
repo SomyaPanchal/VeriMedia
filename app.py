@@ -622,6 +622,15 @@ def analyze_text(file_path):
         if content_truncated:
             report += "\n\nNote: The analyzed content was truncated due to length limitations. The analysis is based on the first portion of the document."
         
+        # If toxicity level is None, replace suggestions with praise messages
+        if toxicity_level.lower() == "none":
+            suggestions = [
+                "Excellent work! Your content demonstrates ethical and inclusive language.",
+                "Your language choices are respectful and considerate of diverse perspectives.",
+                "Great job creating content that's free from problematic terminology.",
+                "Well done on producing balanced and fair content!"
+            ]
+        
         return {
             'toxicity_level': toxicity_level,
             'suggestions': suggestions,
@@ -820,6 +829,15 @@ def analyze_audio(file_path):
         
         # Clean up the report content
         report = cleanup_report_content(report)
+        
+        # If toxicity level is None, replace suggestions with praise messages
+        if toxicity_level.lower() == "none":
+            suggestions = [
+                "Excellent work! Your audio content demonstrates ethical and inclusive language.",
+                "Your spoken communication is respectful and considerate of diverse perspectives.",
+                "Great job creating audio content that's free from problematic terminology.",
+                "Well done on producing balanced and fair audio content!"
+            ]
         
         return {
             'toxicity_level': toxicity_level,
@@ -1129,6 +1147,15 @@ def analyze_video(file_path):
             
             # Clean up the report content
             report = cleanup_report_content(report)
+            
+            # If toxicity level is None, replace suggestions with praise messages
+            if toxicity_level.lower() == "none":
+                suggestions = [
+                    "Excellent work! Your video content demonstrates ethical and inclusive language.",
+                    "Your video communication is respectful and considerate of diverse perspectives.",
+                    "Great job creating video content that's free from problematic terminology.",
+                    "Well done on producing balanced and fair video content!"
+                ]
             
             return {
                 'toxicity_level': toxicity_level,

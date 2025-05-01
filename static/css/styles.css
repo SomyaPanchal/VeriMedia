@@ -1374,4 +1374,41 @@ footer {
 /* Make sure word-wrap works for long transcriptions */
 .transcription-content p {
     word-break: break-word;
+}
+
+/* Praise styles for None toxicity level */
+.praise-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.praise-item {
+    display: flex;
+    gap: 1rem;
+    background-color: rgba(16, 185, 129, 0.1); /* Light green background */
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    border-left: 4px solid #4CAF50; /* Green accent */
+}
+
+.praise-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background-color: rgba(16, 185, 129, 0.2); /* Slightly darker green background */
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.praise-icon i {
+    color: #4CAF50; /* Green color */
+    font-size: 1.25rem;
+}
+
+.praise-item .suggestion-content p {
+    color: var(--gray-800);
+    font-weight: 500;
 } 
