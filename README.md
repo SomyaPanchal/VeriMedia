@@ -1,13 +1,13 @@
 # VeriMedia
 
-VeriMedia is an AI-powered tool designed to analyze media content for ethical reporting on topics related to refugees, migrants, and forcibly displaced populations.
+VeriMedia is an AI-powered tool designed to help journalists, content creators, and the general public analyze media content for ethical and accurate reporting.
 
 ## Features
 
-- **Text Analysis**: Analyze text documents for xenophobic language, misinformation, and harmful content
-- **Audio Analysis**: Transcribe and analyze audio recordings for problematic speech
-- **Video Analysis**: Extract audio from videos, transcribe, and analyze for harmful content
-- **Xenophobic Language Detection**: Identify potentially problematic words with word cloud visualization
+- **Text Analysis**: Analyze text documents for problematic language, misinformation, and harmful content
+- **Audio Analysis**: Transcribe and analyze audio recordings for ethical considerations
+- **Video Analysis**: Extract audio from videos, transcribe, and analyze for content improvement
+- **Language Detection**: Identify potentially problematic words with word cloud visualization
 - **Comprehensive Reports**: Get detailed analysis reports with toxicity levels and improvement suggestions
 - **PDF Export**: Download analysis results as PDF reports
 
@@ -24,7 +24,7 @@ VeriMedia is an AI-powered tool designed to analyze media content for ethical re
 
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/VeriMedia.git
+   git clone https://github.com/FlashCarrot/VeriMedia.git
    cd VeriMedia
    ```
 
@@ -44,7 +44,7 @@ VeriMedia is an AI-powered tool designed to analyze media content for ethical re
 
 1. Clone the repository:
    ```
-   git clone https://github.com/your-username/VeriMedia.git
+   git clone https://github.com/FlashCarrot/VeriMedia.git
    cd VeriMedia
    ```
 
@@ -83,7 +83,7 @@ VeriMedia is an AI-powered tool designed to analyze media content for ethical re
    - Toxicity level assessment
    - Specific improvement suggestions
    - Full transcription (for audio/video)
-   - Word cloud of xenophobic language (for text)
+   - Word cloud of problematic language (for text)
    - Comprehensive analysis report
 4. Download the report as a PDF for your records
 
@@ -92,6 +92,14 @@ VeriMedia is an AI-powered tool designed to analyze media content for ethical re
 - **API Keys**: Never commit your API keys to the repository. The `.env` file is included in `.gitignore` to prevent accidental commits.
 - **Environment Variables**: Always use environment variables for sensitive information.
 - **Secret Management**: For production deployment, use a proper secret management solution.
+
+## Team
+
+The VeriMedia tool is developed by a team of specialists:
+- Fengyu Yang - Text Content Specialist
+- Qianwen Zhu - Audio Content Specialist
+- Qi Sheng - Video Content Specialist
+- Somya Panchal - Integration and System Specialist
 
 ## License
 
