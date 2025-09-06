@@ -93,13 +93,6 @@ VeriMedia is an AI-powered tool designed to help journalists, content creators, 
 - **Environment Variables**: Always use environment variables for sensitive information.
 - **Secret Management**: For production deployment, use a proper secret management solution.
 
-## Team
-
-The VeriMedia tool is developed by a team of specialists:
-- Fengyu Yang - Text Content Specialist
-- Qianwen Zhu - Audio Content Specialist
-- Qi Sheng - Video Content Specialist
-- Somya Panchal - Integration and System Specialist
 
 ## License
 
